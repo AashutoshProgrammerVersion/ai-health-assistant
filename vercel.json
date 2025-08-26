@@ -1,18 +1,23 @@
 {
-    "version": 2,
-    "builds": [
-        {
-            "src": "run.py",
-            "use": "@vercel/python"
-        }
-    ],
-    "routes": [
-        {
-            "src": "/(.*)",
-            "dest": "run.py"
-        }
-    ],
-    "env": {
-        "FLASK_ENV": "production"
+  "version": 2,
+  "builds": [
+    {
+      "src": "vercel_app.py",
+      "use": "@vercel/python"
     }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "vercel_app.py"
+    }
+  ],
+  "env": {
+    "FLASK_ENV": "production"
+  },
+  "functions": {
+    "vercel_app.py": {
+      "maxDuration": 30
+    }
+  }
 }
