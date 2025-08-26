@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="fas fa-edit me-2"></i>Edit Event</h4>
+                <p class="mb-0 text-muted">Modify your calendar event and AI optimization settings</p>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            {{ form.title.label(class="form-label") }}
+                            {{ form.title(class="form-control") }}
+                            {% if form.title.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.title.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ form.event_type.label(class="form-label") }}
+                            {{ form.event_type(class="form-select") }}
+                            {% if form.event_type.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.event_type.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows="3") }}
+                        {% if form.description.errors %}
+                            <div class="text-danger">
+                                {% for error in form.description.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">Provide details to help AI better understand and optimize this event</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            {{ form.start_time.label(class="form-label") }}
+                            {{ form.start_time(class="form-control") }}
+                            {% if form.start_time.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.start_time.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            {{ form.end_time.label(class="form-label") }}
+                            {{ form.end_time(class="form-control") }}
+                            {% if form.end_time.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.end_time.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.priority_level.label(class="form-label") }}
+                        {{ form.priority_level(class="form-range") }}
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">Very Low</small>
+                            <small class="text-muted">Low</small>
+                            <small class="text-muted">Normal</small>
+                            <small class="text-muted">High</small>
+                            <small class="text-muted">Very High</small>
+                        </div>
+                        <div class="form-text">
+                            Current Priority: <span id="priorityValue" class="fw-bold">Normal</span>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-light mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-robot me-2"></i>AI Optimization Settings
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        {{ form.is_ai_modifiable(class="form-check-input") }}
+                                        {{ form.is_ai_modifiable.label(class="form-check-label") }}
+                                    </div>
+                                    <small class="text-muted">Allow AI to suggest changes to this event</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        {{ form.is_fixed_time(class="form-check-input") }}
+                                        {{ form.is_fixed_time.label(class="form-check-label") }}
+                                    </div>
+                                    <small class="text-muted">This event cannot be moved to a different time</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Show AI modification history if available -->
+                            {% if event.last_ai_modified %}
+                            <div class="alert alert-info mt-3 mb-0">
+                                <i class="fas fa-history me-2"></i>
+                                <strong>Last AI Modification:</strong> {{ event.last_ai_modified.strftime('%Y-%m-%d %H:%M') }}
+                                <br>
+                                <small class="text-muted">This event was previously optimized by AI</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Event Statistics -->
+                    <div class="card bg-light mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-chart-line me-2"></i>Event History
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-4">
+                                    <div class="stat-item">
+                                        <h5 class="text-primary">{{ event.created_at.strftime('%Y-%m-%d') }}</h5>
+                                        <small class="text-muted">Created</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="stat-item">
+                                        <h5 class="text-success">{{ event.priority_level }}/5</h5>
+                                        <small class="text-muted">Priority</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="stat-item">
+                                        <h5 class="text-info">
+                                            {% set duration = (event.end_time - event.start_time).total_seconds() / 3600 %}
+                                            {{ "%.1f"|format(duration) }}h
+                                        </h5>
+                                        <small class="text-muted">Duration</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <a href="{{ url_for('main.calendar') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>Back to Calendar
+                            </a>
+                        </div>
+                        
+                        <div>
+                            <button type="button" class="btn btn-danger me-2" onclick="confirmDelete()">
+                                <i class="fas fa-trash me-1"></i>Delete Event
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger" id="deleteModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Delete Event
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this event?</p>
+                <div class="alert alert-warning">
+                    <strong>{{ event.title }}</strong><br>
+                    <small>{{ event.start_time.strftime('%Y-%m-%d %H:%M') }} - {{ event.end_time.strftime('%H:%M') }}</small>
+                </div>
+                <p class="text-muted">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('main.delete_calendar_event', event_id=event.id) }}" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-1"></i>Delete Event
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Priority level slider
+    const prioritySlider = document.getElementById('priority_level');
+    const priorityValue = document.getElementById('priorityValue');
+    const priorityNames = ['Very Low', 'Low', 'Normal', 'High', 'Very High'];
+    
+    if (prioritySlider && priorityValue) {
+        function updatePriorityDisplay() {
+            const value = parseInt(prioritySlider.value);
+            priorityValue.textContent = priorityNames[value - 1];
+            
+            // Update color based on priority
+            priorityValue.className = 'fw-bold';
+            if (value >= 4) {
+                priorityValue.classList.add('text-danger');
+            } else if (value === 3) {
+                priorityValue.classList.add('text-warning');
+            } else {
+                priorityValue.classList.add('text-secondary');
+            }
+        }
+        
+        prioritySlider.addEventListener('input', updatePriorityDisplay);
+        updatePriorityDisplay(); // Initial update
+    }
+    
+    // AI settings interaction
+    const aiModifiable = document.getElementById('is_ai_modifiable');
+    const fixedTime = document.getElementById('is_fixed_time');
+    
+    if (aiModifiable && fixedTime) {
+        // If fixed time is checked, AI modifiable should be disabled
+        fixedTime.addEventListener('change', function() {
+            if (this.checked) {
+                aiModifiable.checked = false;
+                aiModifiable.disabled = true;
+            } else {
+                aiModifiable.disabled = false;
+            }
+        });
+        
+        // Initial state
+        if (fixedTime.checked) {
+            aiModifiable.disabled = true;
+        }
+    }
+});
+
+function confirmDelete() {
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-upload me-2"></i>Upload Health Data Files
+                    </h4>
+                    <p class="text-muted mb-0">Upload your health data from wearable devices for AI analysis</p>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Supported Devices Info -->
+                    <div class="alert alert-info mb-4">
+                        <h6><i class="fas fa-info-circle me-2"></i>Supported Devices & Formats</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Devices:</strong>
+                                <ul class="mb-0">
+                                    <li>Samsung Health (Galaxy Watch, Galaxy Ring, etc.)</li>
+                                    <li>Apple Health (Apple Watch)</li>
+                                    <li>Fitbit devices</li>
+                                    <li>Garmin watches</li>
+                                    <li>Other fitness trackers</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>File Types:</strong>
+                                <ul class="mb-0">
+                                    {% for format in supported_formats %}
+                                    <li>.{{ format }} files</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upload Form -->
+                    <form id="healthDataForm" enctype="multipart/form-data">
+                        <div class="mb-4">
+                            <label for="healthFiles" class="form-label">Select Health Data Files</label>
+                            <div class="upload-area border rounded p-4 text-center" 
+                                 id="uploadArea" 
+                                 ondrop="dropHandler(event);" 
+                                 ondragover="dragOverHandler(event);"
+                                 ondragleave="dragLeaveHandler(event);">
+                                <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                <h5>Drag and drop files here</h5>
+                                <p class="text-muted">or</p>
+                                <input type="file" 
+                                       id="healthFiles" 
+                                       name="health_files" 
+                                       multiple 
+                                       accept=".csv,.json,.txt,.xml,.pdf"
+                                       class="form-control"
+                                       style="display: none;">
+                                <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('healthFiles').click();">
+                                    <i class="fas fa-folder-open me-2"></i>Choose Files
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Selected Files Display -->
+                        <div id="selectedFiles" class="mb-4" style="display: none;">
+                            <h6>Selected Files:</h6>
+                            <div id="filesList" class="list-group">
+                                <!-- Files will be added here dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Processing Options -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="generateCalendarSuggestions" checked>
+                                    <label class="form-check-label" for="generateCalendarSuggestions">
+                                        Generate calendar optimization suggestions
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="createHealthReminders" checked>
+                                    <label class="form-check-label" for="createHealthReminders">
+                                        Create health-based reminders
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg" id="processBtn" disabled>
+                                <i class="fas fa-brain me-2"></i>Process with AI
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Processing Status -->
+                    <div id="processingStatus" class="mt-4" style="display: none;">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-border text-primary me-3" role="status">
+                                        <span class="visually-hidden">Processing...</span>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1">Processing your health data...</h6>
+                                        <p class="text-muted mb-0">Using Gemini 2.5 Flash AI to analyze your files</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results Display -->
+                    <div id="resultsSection" class="mt-4" style="display: none;">
+                        <!-- Results will be populated here -->
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- How to Export Data Guide -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-question-circle me-2"></i>How to Export Your Health Data
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="accordion" id="exportGuide">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="samsungHeader">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#samsungCollapse">
+                                    Samsung Health / Galaxy Wearables
+                                </button>
+                            </h2>
+                            <div id="samsungCollapse" class="accordion-collapse collapse" data-bs-parent="#exportGuide">
+                                <div class="accordion-body">
+                                    <ol>
+                                        <li>Open Samsung Health app</li>
+                                        <li>Go to Settings → Data Export</li>
+                                        <li>Select data types to export</li>
+                                        <li>Choose export format (CSV recommended)</li>
+                                        <li>Download the exported files</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="appleHeader">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#appleCollapse">
+                                    Apple Health
+                                </button>
+                            </h2>
+                            <div id="appleCollapse" class="accordion-collapse collapse" data-bs-parent="#exportGuide">
+                                <div class="accordion-body">
+                                    <ol>
+                                        <li>Open Health app on iPhone</li>
+                                        <li>Tap your profile picture</li>
+                                        <li>Select "Export All Health Data"</li>
+                                        <li>Share the exported XML file</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="fitbitHeader">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#fitbitCollapse">
+                                    Fitbit
+                                </button>
+                            </h2>
+                            <div id="fitbitCollapse" class="accordion-collapse collapse" data-bs-parent="#exportGuide">
+                                <div class="accordion-body">
+                                    <ol>
+                                        <li>Log into fitbit.com</li>
+                                        <li>Go to Data Export</li>
+                                        <li>Request your data</li>
+                                        <li>Download when ready (usually within 24 hours)</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// File upload handling
+let selectedFiles = [];
+
+document.getElementById('healthFiles').addEventListener('change', function(e) {
+    handleFiles(e.target.files);
+});
+
+function dropHandler(ev) {
+    ev.preventDefault();
+    document.getElementById('uploadArea').classList.remove('border-primary', 'bg-light');
+    handleFiles(ev.dataTransfer.files);
+}
+
+function dragOverHandler(ev) {
+    ev.preventDefault();
+    document.getElementById('uploadArea').classList.add('border-primary', 'bg-light');
+}
+
+function dragLeaveHandler(ev) {
+    ev.preventDefault();
+    document.getElementById('uploadArea').classList.remove('border-primary', 'bg-light');
+}
+
+function handleFiles(files) {
+    selectedFiles = Array.from(files);
+    displaySelectedFiles();
+    document.getElementById('processBtn').disabled = selectedFiles.length === 0;
+}
+
+function displaySelectedFiles() {
+    const filesListContainer = document.getElementById('selectedFiles');
+    const filesList = document.getElementById('filesList');
+    
+    if (selectedFiles.length === 0) {
+        filesListContainer.style.display = 'none';
+        return;
+    }
+    
+    filesListContainer.style.display = 'block';
+    filesList.innerHTML = '';
+    
+    selectedFiles.forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+        fileItem.innerHTML = `
+            <div>
+                <i class="fas fa-file me-2"></i>
+                <strong>${file.name}</strong>
+                <small class="text-muted ms-2">(${(file.size / 1024).toFixed(1)} KB)</small>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeFile(${index})">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        filesList.appendChild(fileItem);
+    });
+}
+
+function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    displaySelectedFiles();
+    document.getElementById('processBtn').disabled = selectedFiles.length === 0;
+}
+
+// Form submission
+document.getElementById('healthDataForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    processHealthFiles();
+});
+
+async function processHealthFiles() {
+    if (selectedFiles.length === 0) {
+        alert('Please select files to process');
+        return;
+    }
+    
+    // Show processing status
+    document.getElementById('processingStatus').style.display = 'block';
+    document.getElementById('processBtn').disabled = true;
+    
+    // Prepare form data
+    const formData = new FormData();
+    selectedFiles.forEach(file => {
+        formData.append('health_files', file);
+    });
+    
+    try {
+        const response = await fetch('/health_data/process', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        // Hide processing status
+        document.getElementById('processingStatus').style.display = 'none';
+        
+        if (result.success) {
+            displayResults(result);
+        } else {
+            displayError(result.error, result.details);
+        }
+        
+    } catch (error) {
+        document.getElementById('processingStatus').style.display = 'none';
+        displayError('Network error: ' + error.message);
+    }
+    
+    document.getElementById('processBtn').disabled = false;
+}
+
+function displayResults(result) {
+    const resultsSection = document.getElementById('resultsSection');
+    resultsSection.style.display = 'block';
+    
+    resultsSection.innerHTML = `
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-check-circle me-2"></i>Processing Complete!
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <strong>Files Processed:</strong> ${result.files_processed}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Health Score:</strong> 
+                        <span class="badge bg-primary">${result.health_score}/100</span>
+                    </div>
+                </div>
+                
+                <h6>AI Recommendations:</h6>
+                <ul class="list-group list-group-flush">
+                    ${result.recommendations.map(rec => `
+                        <li class="list-group-item">
+                            <i class="fas fa-lightbulb text-warning me-2"></i>${rec}
+                        </li>
+                    `).join('')}
+                </ul>
+                
+                <div class="mt-3">
+                    <a href="/dashboard" class="btn btn-primary me-2">
+                        <i class="fas fa-tachometer-alt me-2"></i>View Dashboard
+                    </a>
+                    <a href="/health_data/history" class="btn btn-outline-secondary">
+                        <i class="fas fa-history me-2"></i>View History
+                    </a>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function displayError(error, details = []) {
+    const resultsSection = document.getElementById('resultsSection');
+    resultsSection.style.display = 'block';
+    
+    resultsSection.innerHTML = `
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Processing Failed
+                </h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Error:</strong> ${error}</p>
+                ${details.length > 0 ? `
+                    <h6>Details:</h6>
+                    <ul>
+                        ${details.map(detail => `<li>${detail}</li>`).join('')}
+                    </ul>
+                ` : ''}
+                <button type="button" class="btn btn-primary" onclick="location.reload()">
+                    <i class="fas fa-redo me-2"></i>Try Again
+                </button>
+            </div>
+        </div>
+    `;
+}
+</script>
+
+<style>
+.upload-area {
+    border: 2px dashed #dee2e6;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.upload-area:hover {
+    border-color: #0d6efd;
+    background-color: #f8f9fa;
+}
+
+.upload-area.border-primary {
+    border-color: #0d6efd !important;
+}
+</style>
+
+{% endblock %}

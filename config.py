@@ -1,0 +1,139 @@
+"""
+Configuration Settings for Flask Application
+
+This file contains all the configuration settings that Flask needs to run properly.
+It handles environment variables, database connections, security settings, and AI service configurations.
+Think of this as the "settings panel" for your entire web application.
+"""
+
+# STANDARD LIBRARY IMPORTS - Python built-in modules
+import os
+"""
+'import os' - Imports Python's operating system interface module
+'os' - Provides functions to interact with the operating system
+Used here for file paths, environment variables, and directory operations
+"""
+
+# THIRD-PARTY IMPORTS - External packages we installed
+from dotenv import load_dotenv
+"""
+'from dotenv import load_dotenv' - Import function from python-dotenv package
+'dotenv' - Package that loads environment variables from .env files
+'load_dotenv' - Specific function that reads .env file and loads variables
+This allows us to store secret keys in a .env file instead of hardcoding them
+"""
+
+# DIRECTORY PATH SETUP - Finding where our application files are located
+basedir = os.path.abspath(os.path.dirname(__file__))
+"""
+'basedir = os.path.abspath(os.path.dirname(__file__))' - Get absolute path to project directory
+'__file__' - Special Python variable containing the path to current file (config.py)
+'os.path.dirname(__file__)' - Get the directory containing this file
+'os.path.abspath()' - Convert to absolute path (complete path from root directory)
+'basedir' - Variable storing the complete path to our project folder
+This ensures we can find our database and .env files regardless of where Python runs from
+"""
+
+# ENVIRONMENT VARIABLES LOADING - Reading secret values from .env file
+load_dotenv(os.path.join(basedir, '.env'))
+"""
+'load_dotenv(os.path.join(basedir, '.env'))' - Load environment variables from .env file
+'os.path.join(basedir, '.env')' - Create file path by joining directory and filename
+'os.path.join()' - Safely combines file paths (handles / vs \\ on different systems)
+'load_dotenv()' - Function that reads the .env file and makes variables available
+After this runs, we can access variables from .env using os.environ.get()
+"""
+
+# CONFIGURATION CLASS - Container for all Flask application settings
+class Config:
+    """
+    'class Config:' - Define a new class to hold configuration settings
+    'class' - Python keyword to create a new class (blueprint for objects)
+    'Config' - Name of our class (capitalized by convention)
+    ':' - Colon indicates the start of the class body
+    Flask will use this class to configure the application
+    """
+    
+    # SECURITY CONFIGURATION - Secret key for encrypting user sessions and forms
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
+    """
+    'SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production''
+    'SECRET_KEY' - Class attribute that Flask uses for cryptographic operations
+    'os.environ.get('SECRET_KEY')' - Try to get SECRET_KEY from environment variables
+    'or' - Python logical operator, if first value is None/empty, use second value
+    'dev-secret-key-change-in-production' - Fallback value for development
+    This key encrypts user sessions, form tokens, and other sensitive data
+    """
+    
+    # DATABASE CONFIGURATION - Where and how to connect to the database
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(basedir, 'app.db')
+    """
+    'SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(basedir, 'app.db''
+    'SQLALCHEMY_DATABASE_URI' - SQLAlchemy setting that specifies database location
+    'os.environ.get('DATABASE_URL')' - Try to get database URL from environment
+    'sqlite:///' - SQLite database URL prefix (three slashes for local file)
+    'os.path.join(basedir, 'app.db')' - Create path to app.db file in project directory
+    '+' - String concatenation to combine URL prefix with file path
+    This tells SQLAlchemy to use a SQLite database file named app.db in our project folder
+    """
+    
+    # SQLALCHEMY OPTIMIZATION - Disable unnecessary feature for better performance
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    """
+    'SQLALCHEMY_TRACK_MODIFICATIONS = False' - Disable SQLAlchemy event tracking
+    'SQLALCHEMY_TRACK_MODIFICATIONS' - SQLAlchemy setting for object change tracking
+    'False' - Boolean value to disable this feature
+    This feature tracks every change to database objects but uses extra memory
+    Setting to False improves performance since we don't need this tracking
+    """
+    
+    # AI SERVICE CONFIGURATION - Google Gemini API settings
+    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+    """
+    'GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')' - Google Gemini API key
+    'GEMINI_API_KEY' - Configuration key for Google's Gemini AI service
+    'os.environ.get('GEMINI_API_KEY')' - Get API key from environment variables
+    This key authenticates our app with Google's Gemini AI service for health advice
+    """
+    
+    # GOOGLE CALENDAR API CONFIGURATION - Calendar integration settings
+    GOOGLE_CALENDAR_CLIENT_ID = os.environ.get('GOOGLE_CALENDAR_CLIENT_ID')
+    GOOGLE_CALENDAR_CLIENT_SECRET = os.environ.get('GOOGLE_CALENDAR_CLIENT_SECRET')
+    # SERVER_NAME = 'localhost:5000'  # Uncomment to force localhost URLs for OAuth
+    """
+    Google Calendar OAuth2 credentials for calendar integration
+    These allow users to connect their Google Calendar for AI schedule optimization
+    Note: For OAuth to work, make sure your Google Cloud Console has these redirect URIs:
+    - http://127.0.0.1:5000/google_calendar/callback
+    - http://localhost:5000/google_calendar/callback
+    """
+    
+    # FILE UPLOAD CONFIGURATION - Health data file processing settings
+    MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB max total upload size
+    UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
+    ALLOWED_HEALTH_FILE_EXTENSIONS = {
+        'csv', 'json', 'txt', 'xml', 'pdf'  # Support multiple wearable data formats
+    }
+    """
+    File upload settings for health data processing
+    Supports Samsung Health, Apple Health, Fitbit, Garmin data formats
+    Replaces Samsung Health API integration with drag-and-drop file upload
+    """
+    
+    # AI PROCESSING SETTINGS - Enhanced ML model configurations
+    SPACY_MODEL = 'en_core_web_sm'  # Lightweight English model for local processing
+    GEMINI_MODEL = 'gemini-2.5-flash'  # Latest Gemini model for health data processing
+    HEALTH_SCORE_WEIGHTS = {
+        'sleep_hours': 0.25,
+        'water_intake': 0.15,
+        'activity_level': 0.20,
+        'heart_rate': 0.15,
+        'steps_count': 0.15,
+        'mood': 0.10
+    }
+    """
+    Enhanced configuration for AI and health analytics
+    SPACY_MODEL: spaCy model for NLP processing of user preferences
+    GEMINI_MODEL: Gemini 2.5 Flash for health data processing and recommendations
+    HEALTH_SCORE_WEIGHTS: Importance weights for different health metrics
+    """

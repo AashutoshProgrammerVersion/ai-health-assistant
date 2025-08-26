@@ -1,0 +1,784 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <!-- Header Section -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-chart-line me-2"></i>Health Dashboard</h2>
+                <p class="text-muted mb-0">Track your health data and get AI-powered insights to improve your well-being.</p>
+            </div>
+            <div>
+                {% if preferences and preferences.samsung_health_connected %}
+                    <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Wearable Device Connected</span>
+                {% else %}
+                    <a href="{{ url_for('main.user_preferences') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-link me-1"></i>Connect Wearable Device
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Health Score Card -->
+        {% if health_score is defined %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-heartbeat me-2 text-danger"></i>Health Score</h5>
+                <small class="text-muted">Updated {{ health_score.updated_at.strftime('%Y-%m-%d %H:%M') if health_score.updated_at else 'Never' }}</small>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 text-center">
+                        <div class="health-score-circle">
+                            <h2 class="display-4 mb-0 
+                                {% if health_score >= 80 %}text-success
+                                {% elif health_score >= 60 %}text-warning
+                                {% else %}text-danger{% endif %}">
+                                {{ health_score }}
+                            </h2>
+                            <small class="text-muted">Overall Score</small>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label small">Activity Level</label>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-success" role="progressbar" 
+                                             style="width: {{ activity_score or 50 }}%" 
+                                             aria-valuenow="{{ activity_score or 50 }}" 
+                                             aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <small class="text-muted">{{ activity_score or 50 }}/100</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small">Sleep Quality</label>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-info" role="progressbar" 
+                                             style="width: {{ sleep_score or 50 }}%" 
+                                             aria-valuenow="{{ sleep_score or 50 }}" 
+                                             aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <small class="text-muted">{{ sleep_score or 50 }}/100</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label small">Nutrition</label>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-warning" role="progressbar" 
+                                             style="width: {{ nutrition_score or 50 }}%" 
+                                             aria-valuenow="{{ nutrition_score or 50 }}" 
+                                             aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <small class="text-muted">{{ nutrition_score or 50 }}/100</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label small">Hydration</label>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-primary" role="progressbar" 
+                                             style="width: {{ hydration_score or 50 }}%" 
+                                             aria-valuenow="{{ hydration_score or 50 }}" 
+                                             aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <small class="text-muted">{{ hydration_score or 50 }}/100</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Today's Goals Progress -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-target me-2 text-primary"></i>Today's Goals</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 text-center mb-3">
+                        <div class="goal-progress">
+                            <i class="fas fa-tint fa-2x text-primary mb-2"></i>
+                            <h4>{{ water_consumed or 0 }}/{{ water_goal or 2 }}L</h4>
+                            <div class="progress mb-2">
+                                {% set water_percentage = ((water_consumed or 0) / (water_goal or 2) * 100) | round %}
+                                <div class="progress-bar bg-primary" style="width: {{ [water_percentage, 100] | min }}%"></div>
+                            </div>
+                            <small class="text-muted">Water Intake</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center mb-3">
+                        <div class="goal-progress">
+                            <i class="fas fa-walking fa-2x text-success mb-2"></i>
+                            <h4>{{ steps_taken or 0 }}/{{ steps_goal or 10000 }}</h4>
+                            <div class="progress mb-2">
+                                {% set steps_percentage = ((steps_taken or 0) / (steps_goal or 10000) * 100) | round %}
+                                <div class="progress-bar bg-success" style="width: {{ [steps_percentage, 100] | min }}%"></div>
+                            </div>
+                            <small class="text-muted">Steps</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center mb-3">
+                        <div class="goal-progress">
+                            <i class="fas fa-bed fa-2x text-info mb-2"></i>
+                            <h4>{{ sleep_hours or 0 }}/{{ sleep_goal or 8 }}h</h4>
+                            <div class="progress mb-2">
+                                {% set sleep_percentage = ((sleep_hours or 0) / (sleep_goal or 8) * 100) | round %}
+                                <div class="progress-bar bg-info" style="width: {{ [sleep_percentage, 100] | min }}%"></div>
+                            </div>
+                            <small class="text-muted">Sleep</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Health Data -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-chart-bar me-2 text-secondary"></i>Recent Health Data</h5>
+                <a href="{{ url_for('main.log_data') }}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-plus me-1"></i>Log Data
+                </a>
+            </div>
+            <div class="card-body">
+                {% if health_data %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Sleep (hrs)</th>
+                                    <th>Water (glasses)</th>
+                                    <th>Activity (1-10)</th>
+                                    <th>Steps</th>
+                                    <th>Heart Rate</th>
+                                    <th>Mood (1-10)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for data in health_data[:10] %}
+                                <tr>
+                                    <td>{{ data.date_logged.strftime('%m/%d') }}</td>
+                                    <td>
+                                        {% if data.sleep_duration_hours %}
+                                            <i class="fas fa-bed text-info me-1"></i>{{ data.sleep_duration_hours }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if data.water_intake_liters %}
+                                            <i class="fas fa-tint text-primary me-1"></i>{{ data.water_intake_liters }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if data.active_minutes %}
+                                            <i class="fas fa-dumbbell text-success me-1"></i>{{ data.active_minutes }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if data.steps_count %}
+                                            <i class="fas fa-walking text-warning me-1"></i>{{ data.steps_count }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if data.heart_rate %}
+                                            <i class="fas fa-heartbeat text-danger me-1"></i>{{ data.heart_rate }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if data.mood_score %}
+                                            {% if data.mood_score >= 8 %}
+                                                <i class="fas fa-smile text-success me-1"></i>{{ data.mood_score }}
+                                            {% elif data.mood_score >= 5 %}
+                                                <i class="fas fa-meh text-warning me-1"></i>{{ data.mood_score }}
+                                            {% else %}
+                                                <i class="fas fa-frown text-danger me-1"></i>{{ data.mood_score }}
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No health data logged yet. Start tracking your health metrics!</p>
+                        <a href="{{ url_for('main.log_data') }}" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i>Log Your First Entry
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Comprehensive Health Metrics (Collapsible) -->
+        {% if health_data %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <button class="btn btn-link text-decoration-none p-0 w-100 text-start d-flex justify-content-between align-items-center" 
+                            type="button" data-bs-toggle="collapse" data-bs-target="#comprehensiveMetrics" 
+                            aria-expanded="false" aria-controls="comprehensiveMetrics">
+                        <span><i class="fas fa-chart-line me-2 text-info"></i>Comprehensive Health Metrics</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </h5>
+            </div>
+            <div class="collapse" id="comprehensiveMetrics">
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Activity Metrics Column -->
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <h6 class="text-success border-bottom pb-2"><i class="fas fa-running me-1"></i>Activity Metrics</h6>
+                            {% if health_data and health_data|length > 0 %}
+                                {% set latest = health_data[0] %}
+                                <div class="metric-item mb-2">
+                                    <small class="text-muted">Steps:</small>
+                                    <span class="fw-bold">{{ latest.steps or 'N/A' }}</span>
+                                </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Distance:</small>
+                                <span class="fw-bold">{{ latest.distance_km or 'N/A' }} km</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Active Minutes:</small>
+                                <span class="fw-bold">{{ latest.active_minutes or 'N/A' }} min</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Calories Burned:</small>
+                                <span class="fw-bold">{{ latest.calories_total or 'N/A' }}</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Floors Climbed:</small>
+                                <span class="fw-bold">{{ latest.floors_climbed or 'N/A' }}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Heart Health Column -->
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <h6 class="text-danger border-bottom pb-2"><i class="fas fa-heartbeat me-1"></i>Heart Health</h6>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Resting HR:</small>
+                                <span class="fw-bold">{{ latest.heart_rate_resting or 'N/A' }} BPM</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Average HR:</small>
+                                <span class="fw-bold">{{ latest.heart_rate_avg or 'N/A' }} BPM</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Max HR:</small>
+                                <span class="fw-bold">{{ latest.heart_rate_max or 'N/A' }} BPM</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">HRV:</small>
+                                <span class="fw-bold">{{ latest.heart_rate_variability or 'N/A' }} ms</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Blood Oxygen:</small>
+                                <span class="fw-bold">{{ latest.blood_oxygen_percent or 'N/A' }}%</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Sleep Metrics Column -->
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <h6 class="text-primary border-bottom pb-2"><i class="fas fa-bed me-1"></i>Sleep Analysis</h6>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Total Sleep:</small>
+                                <span class="fw-bold">{{ latest.sleep_duration_hours or 'N/A' }} hours</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Sleep Quality:</small>
+                                <span class="fw-bold">{{ latest.sleep_quality_score or 'N/A' }}/100</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Deep Sleep:</small>
+                                <span class="fw-bold">{{ latest.sleep_deep_minutes or 'N/A' }} min</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">REM Sleep:</small>
+                                <span class="fw-bold">{{ latest.sleep_rem_minutes or 'N/A' }} min</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Light Sleep:</small>
+                                <span class="fw-bold">{{ latest.sleep_light_minutes or 'N/A' }} min</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Body Composition -->
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <h6 class="text-warning border-bottom pb-2"><i class="fas fa-weight me-1"></i>Body Composition</h6>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Weight:</small>
+                                <span class="fw-bold">{{ latest.weight_kg or 'N/A' }} kg</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Body Fat:</small>
+                                <span class="fw-bold">{{ latest.body_fat_percent or 'N/A' }}%</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Muscle Mass:</small>
+                                <span class="fw-bold">{{ latest.muscle_mass_kg or 'N/A' }} kg</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Body Temp:</small>
+                                <span class="fw-bold">{{ latest.body_temperature or 'N/A' }}°C</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Wellness Metrics -->
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <h6 class="text-info border-bottom pb-2"><i class="fas fa-smile me-1"></i>Wellness</h6>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Water Intake:</small>
+                                <span class="fw-bold">{{ latest.water_intake_liters or 'N/A' }} L</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Mood Score:</small>
+                                <span class="fw-bold">{{ latest.mood_score or 'N/A' }}/10</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Energy Level:</small>
+                                <span class="fw-bold">{{ latest.energy_level or 'N/A' }}/10</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Stress Level:</small>
+                                <span class="fw-bold">{{ latest.stress_level or 'N/A' }}/100</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Workout Session -->
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <h6 class="text-secondary border-bottom pb-2"><i class="fas fa-dumbbell me-1"></i>Latest Workout</h6>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Type:</small>
+                                <span class="fw-bold">{{ latest.workout_type.title() if latest.workout_type else 'N/A' }}</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Duration:</small>
+                                <span class="fw-bold">{{ latest.workout_duration_minutes or 'N/A' }} min</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Intensity:</small>
+                                <span class="fw-bold">{{ latest.workout_intensity.title() if latest.workout_intensity else 'N/A' }}</span>
+                            </div>
+                            <div class="metric-item mb-2">
+                                <small class="text-muted">Calories:</small>
+                                <span class="fw-bold">{{ latest.workout_calories or 'N/A' }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Historical Data Toggle -->
+                    <div class="mt-3">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#historicalData" aria-expanded="false" aria-controls="historicalData">
+                            <i class="fas fa-history me-1"></i>View Historical Data (Last 7 Days)
+                        </button>
+                    </div>
+                    
+                    <div class="collapse mt-3" id="historicalData">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Sleep</th>
+                                        <th>Steps</th>
+                                        <th>Water</th>
+                                        <th>Mood</th>
+                                        <th>Active Min</th>
+                                        <th>Weight</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for data in health_data %}
+                                    <tr>
+                                        <td><small>{{ data.date_logged.strftime('%m/%d') }}</small></td>
+                                        <td><small>{{ data.sleep_duration_hours or '-' }}h</small></td>
+                                        <td><small>{{ data.steps or '-' }}</small></td>
+                                        <td><small>{{ data.water_intake_liters or '-' }}L</small></td>
+                                        <td><small>{{ data.mood_score or '-' }}/10</small></td>
+                                        <td><small>{{ data.active_minutes or '-' }}min</small></td>
+                                        <td><small>{{ data.weight_kg or '-' }}kg</small></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="card-body">
+                        <p class="text-muted text-center">No health data available yet. <a href="{{ url_for('main.log_data') }}">Log your first entry</a> to see comprehensive metrics.</p>
+                    </div>
+                {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Upcoming Calendar Events -->
+        {% if upcoming_events %}
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-calendar-alt me-2 text-warning"></i>Upcoming Events</h5>
+                <a href="{{ url_for('main.calendar') }}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                {% for event in upcoming_events[:3] %}
+                <div class="d-flex align-items-center mb-2 {% if not loop.last %}border-bottom pb-2{% endif %}">
+                    <div class="me-3">
+                        {% if event.event_type == 'work' %}
+                            <i class="fas fa-briefcase text-primary"></i>
+                        {% elif event.event_type == 'exercise' %}
+                            <i class="fas fa-dumbbell text-success"></i>
+                        {% elif event.event_type == 'meal' %}
+                            <i class="fas fa-utensils text-warning"></i>
+                        {% elif event.event_type == 'health' %}
+                            <i class="fas fa-stethoscope text-info"></i>
+                        {% else %}
+                            <i class="fas fa-calendar text-secondary"></i>
+                        {% endif %}
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="fw-bold">{{ event.title }}</div>
+                        <small class="text-muted">{{ event.start_time.strftime('%Y-%m-%d %H:%M') }}</small>
+                    </div>
+                    <div>
+                        {% if event.is_ai_modifiable %}
+                            <span class="badge bg-success"><i class="fas fa-robot"></i></span>
+                        {% else %}
+                            <span class="badge bg-secondary"><i class="fas fa-lock"></i></span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-4">
+        <!-- AI Recommendations -->
+        {% if ai_recommendations %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-robot me-2 text-info"></i>AI Recommendations</h5>
+            </div>
+            <div class="card-body">
+                {% for recommendation in ai_recommendations[:3] %}
+                <div class="alert alert-{{ 'success' if recommendation.recommendation_type == 'positive' else 'warning' if recommendation.recommendation_type == 'improvement' else 'info' }} py-2">
+                    <div class="d-flex align-items-start">
+                        <i class="fas fa-lightbulb me-2 mt-1"></i>
+                        <div>
+                            <strong>{{ recommendation.recommendation_type.title() }}</strong>
+                            <p class="mb-0 small">{{ recommendation.description }}</p>
+                            {% if recommendation.ai_confidence %}
+                            <small class="text-muted">Confidence: {{ (recommendation.ai_confidence * 100) | round }}%</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- AI-Powered Personalized Advice -->
+        {% if ai_advice %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-brain me-2 text-success"></i>Personalized Health Advice</h5>
+                <small class="text-muted">AI-generated insights based on your health patterns</small>
+            </div>
+            <div class="card-body">
+                <!-- Debug information -->
+                <!-- DEBUG: {{ ai_advice }} -->
+                
+                <!-- Key Insights -->
+                {% if ai_advice and ai_advice.insights %}
+                <div class="mb-3">
+                    <h6 class="text-primary"><i class="fas fa-eye me-1"></i>Key Insights</h6>
+                    {% if ai_advice.insights is string %}
+                        <div class="alert alert-info py-2 mb-2">
+                            <small>{{ ai_advice.insights }}</small>
+                        </div>
+                    {% elif ai_advice.insights is sequence and ai_advice.insights is not string %}
+                        {% for insight in ai_advice.insights %}
+                            {% if insight and insight|string|length > 0 %}
+                            <div class="alert alert-info py-2 mb-2">
+                                <small>{{ insight }}</small>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-info py-2 mb-2">
+                            <small>{{ ai_advice.insights|string }}</small>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <!-- Priority Recommendations -->
+                {% if ai_advice and ai_advice.recommendations %}
+                <div class="mb-3">
+                    <h6 class="text-success"><i class="fas fa-star me-1"></i>Priority Recommendations</h6>
+                    {% if ai_advice.recommendations is string %}
+                        <div class="alert alert-success py-2 mb-2">
+                            <small><i class="fas fa-arrow-right me-1"></i>{{ ai_advice.recommendations }}</small>
+                        </div>
+                    {% elif ai_advice.recommendations is sequence and ai_advice.recommendations is not string %}
+                        {% for recommendation in ai_advice.recommendations %}
+                            {% if recommendation and recommendation|string|length > 0 %}
+                            <div class="alert alert-success py-2 mb-2">
+                                <small><i class="fas fa-arrow-right me-1"></i>{{ recommendation }}</small>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-success py-2 mb-2">
+                            <small><i class="fas fa-arrow-right me-1"></i>{{ ai_advice.recommendations|string }}</small>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <!-- Quick Wins -->
+                {% if ai_advice and ai_advice.quick_wins %}
+                <div class="mb-3">
+                    <h6 class="text-warning"><i class="fas fa-bolt me-1"></i>Quick Wins</h6>
+                    {% if ai_advice.quick_wins is string %}
+                        <div class="alert alert-warning py-2 mb-2">
+                            <small><i class="fas fa-check me-1"></i>{{ ai_advice.quick_wins }}</small>
+                        </div>
+                    {% elif ai_advice.quick_wins is sequence and ai_advice.quick_wins is not string %}
+                        {% for quick_win in ai_advice.quick_wins %}
+                            {% if quick_win and quick_win|string|length > 0 %}
+                            <div class="alert alert-warning py-2 mb-2">
+                                <small><i class="fas fa-check me-1"></i>{{ quick_win }}</small>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-warning py-2 mb-2">
+                            <small><i class="fas fa-check me-1"></i>{{ ai_advice.quick_wins|string }}</small>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <!-- Areas of Concern -->
+                {% if ai_advice and ai_advice.concerns %}
+                <div class="mb-3">
+                    <h6 class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Areas to Watch</h6>
+                    {% if ai_advice.concerns is string %}
+                        <div class="alert alert-danger py-2 mb-2">
+                            <small><i class="fas fa-info-circle me-1"></i>{{ ai_advice.concerns }}</small>
+                        </div>
+                    {% elif ai_advice.concerns is sequence and ai_advice.concerns is not string %}
+                        {% for concern in ai_advice.concerns %}
+                            {% if concern and concern|string|length > 0 %}
+                            <div class="alert alert-danger py-2 mb-2">
+                                <small><i class="fas fa-info-circle me-1"></i>{{ concern }}</small>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-danger py-2 mb-2">
+                            <small><i class="fas fa-info-circle me-1"></i>{{ ai_advice.concerns|string }}</small>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                <!-- Motivation Message -->
+                {% if ai_advice and ai_advice.motivation %}
+                <div class="bg-light p-3 rounded">
+                    <h6 class="text-primary mb-2"><i class="fas fa-heart me-1"></i>Stay Motivated</h6>
+                    <p class="mb-0 small text-muted">{{ ai_advice.motivation }}</p>
+                </div>
+                {% endif %}
+                
+                <!-- Source Information -->
+                {% if ai_advice %}
+                <div class="mt-3 pt-2 border-top">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Generated by {{ 'AI Assistant' if ai_advice.source == 'gemini_ai' else 'Health Analytics' }}
+                        {% if ai_advice.generated_at %} 
+                        at {{ ai_advice.generated_at[:19] | replace('T', ' ') }}
+                        {% endif %}
+                        <br><em>This advice is for informational purposes and not a substitute for professional medical consultation.</em>
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Quick Actions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-bolt me-2 text-warning"></i>Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('main.log_data') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>Log Health Data
+                    </a>
+                    <a href="{{ url_for('main.add_calendar_event') }}" class="btn btn-success">
+                        <i class="fas fa-calendar-plus me-1"></i>Add Event
+                    </a>
+                    {% if preferences and preferences.ai_optimization_enabled %}
+                    <button class="btn btn-info" onclick="triggerAIOptimization()">
+                        <i class="fas fa-robot me-1"></i>AI Optimize Schedule
+                    </button>
+                    {% endif %}
+                    <a href="{{ url_for('main.user_preferences') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-cog me-1"></i>Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Health Streak -->
+        {% if health_streak %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-fire me-2 text-danger"></i>Health Streak</h5>
+            </div>
+            <div class="card-body text-center">
+                <h2 class="display-4 text-success">{{ health_streak.current_streak }}</h2>
+                <p class="mb-1">Days of consistent health tracking</p>
+                <small class="text-muted">Best streak: {{ health_streak.best_streak }} days</small>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- System Status -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2 text-info"></i>System Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="status-item d-flex justify-content-between align-items-center mb-2">
+                    <span>AI Services</span>
+                    <span class="badge bg-success">Active</span>
+                </div>
+                <div class="status-item d-flex justify-content-between align-items-center mb-2">
+                    <span>Wearable Device</span>
+                    <span class="badge bg-{{ 'success' if samsung_health_connected else 'secondary' }}">
+                        {{ 'Connected' if samsung_health_connected else 'Disconnected' }}
+                    </span>
+                </div>
+                <div class="status-item d-flex justify-content-between align-items-center">
+                    <span>Data Sync</span>
+                    <span class="badge bg-{{ 'success' if last_sync_time else 'warning' }}">
+                        {{ last_sync_time.strftime('%H:%M') if last_sync_time else 'Pending' }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function triggerAIOptimization() {
+    // Redirect to calendar with optimization trigger
+    window.location.href = "{{ url_for('main.calendar') }}?optimize=true";
+}
+
+// Remember collapsible section states
+document.addEventListener('DOMContentLoaded', function() {
+    // List of collapsible sections to remember
+    const collapsibleSections = ['comprehensiveMetrics', 'historicalData'];
+    
+    // Restore saved states
+    collapsibleSections.forEach(function(sectionId) {
+        const savedState = localStorage.getItem('dashboard_' + sectionId);
+        const element = document.getElementById(sectionId);
+        
+        if (element && savedState === 'show') {
+            // Show the section if it was previously open
+            element.classList.add('show');
+            // Update the chevron icon
+            const button = document.querySelector('[data-bs-target="#' + sectionId + '"]');
+            if (button) {
+                const icon = button.querySelector('.fa-chevron-down');
+                if (icon) {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-up');
+                }
+            }
+        }
+    });
+    
+    // Save state when sections are toggled
+    collapsibleSections.forEach(function(sectionId) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+            element.addEventListener('shown.bs.collapse', function() {
+                localStorage.setItem('dashboard_' + sectionId, 'show');
+                // Update chevron icon
+                const button = document.querySelector('[data-bs-target="#' + sectionId + '"]');
+                if (button) {
+                    const icon = button.querySelector('.fa-chevron-down');
+                    if (icon) {
+                        icon.classList.remove('fa-chevron-down');
+                        icon.classList.add('fa-chevron-up');
+                    }
+                }
+            });
+            
+            element.addEventListener('hidden.bs.collapse', function() {
+                localStorage.setItem('dashboard_' + sectionId, 'hide');
+                // Update chevron icon
+                const button = document.querySelector('[data-bs-target="#' + sectionId + '"]');
+                if (button) {
+                    const icon = button.querySelector('.fa-chevron-up');
+                    if (icon) {
+                        icon.classList.remove('fa-chevron-up');
+                        icon.classList.add('fa-chevron-down');
+                    }
+                }
+            });
+        }
+    });
+});
+
+// Auto-refresh dashboard every 5 minutes (but preserve collapse states)
+setInterval(function() {
+    // Only refresh if user is still active
+    if (document.hasFocus()) {
+        // Save current collapse states before refresh
+        const collapsibleSections = ['comprehensiveMetrics', 'historicalData'];
+        collapsibleSections.forEach(function(sectionId) {
+            const element = document.getElementById(sectionId);
+            if (element && element.classList.contains('show')) {
+                localStorage.setItem('dashboard_' + sectionId, 'show');
+            }
+        });
+        location.reload();
+    }
+}, 300000);
+</script>
+{% endblock %}

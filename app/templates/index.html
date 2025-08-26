@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="jumbotron text-center bg-light p-5 rounded">
+            <h1 class="display-4">Welcome to Your AI Health Assistant</h1>
+            <p class="lead">Take control of your daily routine with personalized health insights and recommendations.</p>
+            <hr class="my-4">
+            <p>Track your sleep, activity, hydration, and mood to get actionable advice for improving your well-being.</p>
+            <div class="mt-4">
+                <a class="btn btn-primary btn-lg me-3" href="{{ url_for('auth.register') }}" role="button">Get Started</a>
+                <a class="btn btn-outline-primary btn-lg" href="{{ url_for('auth.login') }}" role="button">Sign In</a>
+            </div>
+        </div>
+        
+        <div class="row mt-5">
+            <div class="col-md-4 text-center">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">📊 Track Your Health</h5>
+                        <p class="card-text">Log your daily sleep, water intake, activity levels, and mood easily.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">🧠 Get Personalized Insights</h5>
+                        <p class="card-text">Receive tailored recommendations based on your health patterns.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">📈 Monitor Progress</h5>
+                        <p class="card-text">Visualize your health trends with easy-to-understand charts.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

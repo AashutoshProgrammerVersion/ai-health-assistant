@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="fas fa-plus-circle me-2"></i>Add New Event</h4>
+                <p class="mb-0 text-muted">Create a new calendar event and let AI help optimize your schedule</p>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            {{ form.title.label(class="form-label") }}
+                            {{ form.title(class="form-control") }}
+                            {% if form.title.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.title.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            {{ form.event_type.label(class="form-label") }}
+                            {{ form.event_type(class="form-select") }}
+                            {% if form.event_type.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.event_type.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows="3") }}
+                        {% if form.description.errors %}
+                            <div class="text-danger">
+                                {% for error in form.description.errors %}
+                                    <small>{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">Provide details to help AI better understand and optimize this event</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            {{ form.start_time.label(class="form-label") }}
+                            {{ form.start_time(class="form-control") }}
+                            {% if form.start_time.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.start_time.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            {{ form.end_time.label(class="form-label") }}
+                            {{ form.end_time(class="form-control") }}
+                            {% if form.end_time.errors %}
+                                <div class="text-danger">
+                                    {% for error in form.end_time.errors %}
+                                        <small>{{ error }}</small>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.priority_level.label(class="form-label") }}
+                        {{ form.priority_level(class="form-range") }}
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">Very Low</small>
+                            <small class="text-muted">Low</small>
+                            <small class="text-muted">Normal</small>
+                            <small class="text-muted">High</small>
+                            <small class="text-muted">Very High</small>
+                        </div>
+                        <div class="form-text">
+                            Current Priority: <span id="priorityValue" class="fw-bold">Normal</span>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-light mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-robot me-2"></i>AI Optimization Settings
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        {{ form.is_ai_modifiable(class="form-check-input") }}
+                                        {{ form.is_ai_modifiable.label(class="form-check-label") }}
+                                    </div>
+                                    <small class="text-muted">Allow AI to suggest changes to this event</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        {{ form.is_fixed_time(class="form-check-input") }}
+                                        {{ form.is_fixed_time.label(class="form-check-label") }}
+                                    </div>
+                                    <small class="text-muted">This event cannot be moved to a different time</small>
+                                </div>
+                            </div>
+                            <div class="alert alert-info mt-2 mb-0">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Tip:</strong> Fixed time events (like meetings) should have the "Fixed Time" option checked. 
+                                Flexible events like exercise or study sessions can be optimized by AI.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('main.calendar') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>Create Event
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Event Type Info Modal -->
+<div class="modal fade" id="eventTypeModal" tabindex="-1" aria-labelledby="eventTypeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="eventTypeModalLabel">Event Type Guide</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-12">
+                        <h6><i class="fas fa-briefcase text-primary me-2"></i>Work</h6>
+                        <p class="text-muted mb-3">Meetings, deadlines, projects, and work-related tasks</p>
+                        
+                        <h6><i class="fas fa-dumbbell text-success me-2"></i>Exercise</h6>
+                        <p class="text-muted mb-3">Workouts, sports, physical activities, and fitness routines</p>
+                        
+                        <h6><i class="fas fa-utensils text-warning me-2"></i>Meal</h6>
+                        <p class="text-muted mb-3">Breakfast, lunch, dinner, and snack times</p>
+                        
+                        <h6><i class="fas fa-stethoscope text-info me-2"></i>Health</h6>
+                        <p class="text-muted mb-3">Doctor appointments, medical checkups, and health-related activities</p>
+                        
+                        <h6><i class="fas fa-bed text-secondary me-2"></i>Sleep</h6>
+                        <p class="text-muted mb-3">Sleep schedule, nap times, and rest periods</p>
+                        
+                        <h6><i class="fas fa-calendar text-secondary me-2"></i>Other</h6>
+                        <p class="text-muted">Personal events, hobbies, and miscellaneous activities</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Priority level slider
+    const prioritySlider = document.getElementById('priority_level');
+    const priorityValue = document.getElementById('priorityValue');
+    const priorityNames = ['Very Low', 'Low', 'Normal', 'High', 'Very High'];
+    
+    if (prioritySlider && priorityValue) {
+        function updatePriorityDisplay() {
+            const value = parseInt(prioritySlider.value);
+            priorityValue.textContent = priorityNames[value - 1];
+            
+            // Update color based on priority
+            priorityValue.className = 'fw-bold';
+            if (value >= 4) {
+                priorityValue.classList.add('text-danger');
+            } else if (value === 3) {
+                priorityValue.classList.add('text-warning');
+            } else {
+                priorityValue.classList.add('text-secondary');
+            }
+        }
+        
+        prioritySlider.addEventListener('input', updatePriorityDisplay);
+        updatePriorityDisplay(); // Initial update
+    }
+    
+    // AI settings interaction
+    const aiModifiable = document.getElementById('is_ai_modifiable');
+    const fixedTime = document.getElementById('is_fixed_time');
+    
+    if (aiModifiable && fixedTime) {
+        // If fixed time is checked, AI modifiable should be disabled
+        fixedTime.addEventListener('change', function() {
+            if (this.checked) {
+                aiModifiable.checked = false;
+                aiModifiable.disabled = true;
+            } else {
+                aiModifiable.disabled = false;
+            }
+        });
+        
+        // Initial state
+        if (fixedTime.checked) {
+            aiModifiable.disabled = true;
+        }
+    }
+    
+    // Auto-suggest event type based on title
+    const titleInput = document.getElementById('title');
+    const eventTypeSelect = document.getElementById('event_type');
+    
+    if (titleInput && eventTypeSelect) {
+        titleInput.addEventListener('input', function() {
+            const title = this.value.toLowerCase();
+            let suggestedType = 'other';
+            
+            // Simple keyword matching for event type suggestion
+            if (title.includes('meeting') || title.includes('work') || title.includes('project')) {
+                suggestedType = 'work';
+            } else if (title.includes('gym') || title.includes('workout') || title.includes('exercise') || title.includes('run')) {
+                suggestedType = 'exercise';
+            } else if (title.includes('breakfast') || title.includes('lunch') || title.includes('dinner') || title.includes('meal')) {
+                suggestedType = 'meal';
+            } else if (title.includes('doctor') || title.includes('appointment') || title.includes('checkup')) {
+                suggestedType = 'health';
+            } else if (title.includes('sleep') || title.includes('nap') || title.includes('rest')) {
+                suggestedType = 'sleep';
+            }
+            
+            // Only change if current selection is 'other' or empty
+            if (eventTypeSelect.value === 'other' || eventTypeSelect.value === '') {
+                eventTypeSelect.value = suggestedType;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

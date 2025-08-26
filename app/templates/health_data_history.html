@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="fas fa-history me-2"></i>Health Data History
+        </h2>
+        <a href="{{ url_for('main.health_data_upload') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Upload More Data
+        </a>
+    </div>
+
+    {% if history %}
+        <div class="row">
+            {% for data in history %}
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">
+                            <i class="fas fa-file-medical me-2"></i>
+                            Processing #{{ data.id }}
+                        </h6>
+                        <small class="text-muted">
+                            {{ data.extraction_date.strftime('%Y-%m-%d %H:%M') if data.extraction_date else 'Unknown date' }}
+                        </small>
+                    </div>
+                    <div class="card-body">
+                        
+                        <!-- Health Score -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <strong>Health Score:</strong>
+                                {% set score = data.health_score or 0 %}
+                                <span class="badge {% if score >= 80 %}bg-success{% elif score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ "%.1f"|format(score) }}/100
+                                </span>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Device:</strong>
+                                {{ data.device_type or 'Mixed sources' }}
+                            </div>
+                        </div>
+
+                        <!-- Data Summary -->
+                        {% if data.summary %}
+                        <div class="mb-3">
+                            <h6>Data Summary:</h6>
+                            <div class="small">
+                                {% if data.summary.files_processed %}
+                                <div><strong>Files processed:</strong> {{ data.summary.files_processed }}</div>
+                                {% endif %}
+                                {% if data.summary.date_range %}
+                                <div><strong>Date range:</strong> 
+                                    {{ data.summary.date_range.start }} to {{ data.summary.date_range.end }}
+                                </div>
+                                {% endif %}
+                                {% if data.summary.data_quality %}
+                                <div><strong>Data quality:</strong> 
+                                    <span class="badge {% if data.summary.data_quality == 'excellent' %}bg-success{% elif data.summary.data_quality == 'good' %}bg-primary{% elif data.summary.data_quality == 'fair' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {{ data.summary.data_quality|title }}
+                                    </span>
+                                </div>
+                                {% endif %}
+                                {% if data.summary.devices_detected %}
+                                <div><strong>Devices detected:</strong> 
+                                    {{ ', '.join(data.summary.devices_detected) }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Key Insights -->
+                        {% if data.insights and data.insights.key_findings %}
+                        <div class="mb-3">
+                            <h6>Key Findings:</h6>
+                            <ul class="small mb-0">
+                                {% for finding in data.insights.key_findings[:3] %}
+                                <li>{{ finding }}</li>
+                                {% endfor %}
+                                {% if data.insights.key_findings|length > 3 %}
+                                <li class="text-muted">... and {{ data.insights.key_findings|length - 3 }} more</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        <!-- Recommendations -->
+                        {% if data.insights and data.insights.recommendations %}
+                        <div class="mb-3">
+                            <h6>Top Recommendations:</h6>
+                            <ul class="small mb-0">
+                                {% for rec in data.insights.recommendations[:2] %}
+                                <li><i class="fas fa-lightbulb text-warning me-1"></i>{{ rec }}</li>
+                                {% endfor %}
+                                {% if data.insights.recommendations|length > 2 %}
+                                <li class="text-muted">... and {{ data.insights.recommendations|length - 2 }} more</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        <!-- Priority Areas -->
+                        {% if data.insights and data.insights.priority_areas %}
+                        <div class="mb-3">
+                            <h6>Focus Areas:</h6>
+                            <div>
+                                {% for area in data.insights.priority_areas %}
+                                <span class="badge bg-info me-1">{{ area|title }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#detailsModal{{ data.id }}">
+                                <i class="fas fa-eye me-1"></i>View Details
+                            </button>
+                            {% if data.insights and data.insights.recommendations %}
+                            <button type="button" class="btn btn-sm btn-outline-success" 
+                                    onclick="applyRecommendations({{ data.id }})">
+                                <i class="fas fa-check me-1"></i>Apply to Calendar
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Details Modal -->
+            <div class="modal fade" id="detailsModal{{ data.id }}" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Health Data Details - Processing #{{ data.id }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            {% if data.insights %}
+                            
+                            <!-- Complete Findings -->
+                            {% if data.insights.key_findings %}
+                            <h6>All Key Findings:</h6>
+                            <ul class="mb-3">
+                                {% for finding in data.insights.key_findings %}
+                                <li>{{ finding }}</li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+
+                            <!-- Complete Recommendations -->
+                            {% if data.insights.recommendations %}
+                            <h6>All Recommendations:</h6>
+                            <ul class="mb-3">
+                                {% for rec in data.insights.recommendations %}
+                                <li><i class="fas fa-lightbulb text-warning me-2"></i>{{ rec }}</li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+
+                            <!-- Health Score Breakdown -->
+                            {% if data.health_score %}
+                            <h6>Health Assessment:</h6>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <span>Overall Health Score</span>
+                                    <span><strong>{{ "%.1f"|format(data.health_score) }}/100</strong></span>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar {% if data.health_score >= 80 %}bg-success{% elif data.health_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                         style="width: {{ data.health_score }}%"></div>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Technical Details -->
+                            {% if data.summary %}
+                            <h6>Technical Details:</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <tbody>
+                                        {% if data.summary.files_processed %}
+                                        <tr>
+                                            <td><strong>Files Processed</strong></td>
+                                            <td>{{ data.summary.files_processed }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if data.summary.date_range %}
+                                        <tr>
+                                            <td><strong>Data Range</strong></td>
+                                            <td>{{ data.summary.date_range.start }} to {{ data.summary.date_range.end }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if data.summary.data_quality %}
+                                        <tr>
+                                            <td><strong>Data Quality</strong></td>
+                                            <td>{{ data.summary.data_quality|title }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if data.summary.devices_detected %}
+                                        <tr>
+                                            <td><strong>Devices</strong></td>
+                                            <td>{{ ', '.join(data.summary.devices_detected) }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        <tr>
+                                            <td><strong>Processing Date</strong></td>
+                                            <td>{{ data.extraction_date.strftime('%Y-%m-%d %H:%M:%S') if data.extraction_date else 'Unknown' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% endif %}
+
+                            {% else %}
+                            <p class="text-muted">No detailed insights available for this processing session.</p>
+                            {% endif %}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            {% if data.insights and data.insights.recommendations %}
+                            <button type="button" class="btn btn-primary" onclick="applyRecommendations({{ data.id }})">
+                                <i class="fas fa-calendar-plus me-2"></i>Apply to Calendar
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination (if needed in future) -->
+        {% if history|length == 10 %}
+        <div class="text-center mt-4">
+            <p class="text-muted">Showing latest 10 processing sessions</p>
+            <button class="btn btn-outline-primary">Load More</button>
+        </div>
+        {% endif %}
+
+    {% else %}
+        <!-- Empty State -->
+        <div class="text-center py-5">
+            <i class="fas fa-file-medical fa-4x text-muted mb-3"></i>
+            <h4>No Health Data Processed Yet</h4>
+            <p class="text-muted mb-4">
+                Upload your health data files from wearable devices to get started with AI-powered insights.
+            </p>
+            <a href="{{ url_for('main.health_data_upload') }}" class="btn btn-primary btn-lg">
+                <i class="fas fa-upload me-2"></i>Upload Health Data
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function applyRecommendations(dataId) {
+    // This would integrate with the calendar optimization
+    // For now, show a simple message
+    alert('Calendar optimization feature coming soon! Your recommendations will be applied to optimize your schedule.');
+    
+    // In full implementation, this would:
+    // 1. Get the recommendations from the data
+    // 2. Call the calendar optimization service
+    // 3. Update the user's calendar with health-aware scheduling
+    
+    // fetch(`/calendar/apply_health_recommendations/${dataId}`, {
+    //     method: 'POST',
+    //     headers: {'Content-Type': 'application/json'}
+    // }).then(response => response.json())
+    //   .then(data => {
+    //       if (data.success) {
+    //           alert('Recommendations applied to your calendar!');
+    //       }
+    //   });
+}
+
+// Auto-refresh data every 30 seconds if processing is ongoing
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if there are any recent processing sessions
+    const recentProcessing = {{ 'true' if history and history[0].extraction_date and (history[0].extraction_date.timestamp() > (now.timestamp() - 300)) else 'false' }};
+    
+    if (recentProcessing) {
+        setTimeout(() => {
+            location.reload();
+        }, 30000);
+    }
+});
+</script>
+
+{% endblock %}
