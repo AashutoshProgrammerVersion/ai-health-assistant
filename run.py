@@ -57,15 +57,11 @@ if __name__ == '__main__':
         This creates the 'users' and 'health_data' tables if they don't exist
         """
     
-    # Use production settings for deployment, development for local
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    debug_mode = os.environ.get("FLASK_ENV") != "production"
-    
-    app.run(host='0.0.0.0', port=port, debug=debug_mode)
+    app.run(debug=True)
     """
-    'app.run()' - Start the Flask web server
-    'host='0.0.0.0'' - Listen on all network interfaces (required for deployment)
-    'port=port' - Use environment PORT or default to 5000
-    'debug=debug_mode' - Enable debug only in development
+    'app.run(debug=True)' - Start the Flask development web server
+    'app' - Our Flask application object
+    'run()' - Method that starts the web server to handle HTTP requests
+    'debug=True' - Parameter that enables debug mode for development
+    Debug mode provides error details and auto-reloads when code changes
     """
