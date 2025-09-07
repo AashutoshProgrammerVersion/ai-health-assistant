@@ -484,7 +484,7 @@
             </div>
             <div class="card-body">
                 {% for recommendation in ai_recommendations[:3] %}
-                <div class="alert alert-{{ 'success' if recommendation.recommendation_type == 'positive' else 'warning' if recommendation.recommendation_type == 'improvement' else 'info' }} py-2">
+                <div class="alert alert-{{ 'success' if recommendation.recommendation_type == 'positive' else 'warning' if recommendation.recommendation_type == 'improvement' else 'info' }} advice-alert py-2">
                     <div class="d-flex align-items-start">
                         <i class="fas fa-lightbulb me-2 mt-1"></i>
                         <div>
@@ -502,136 +502,183 @@
         {% endif %}
         
         <!-- AI-Powered Personalized Advice -->
-        {% if ai_advice %}
-        <div class="card mb-4">
+        <div class="card mb-4" id="personalizedAdviceCard">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-brain me-2 text-success"></i>Personalized Health Advice</h5>
+                <h5 class="mb-0">
+                    <button class="btn btn-link text-decoration-none p-0 w-100 text-start d-flex justify-content-between align-items-center" 
+                            type="button" data-bs-toggle="collapse" data-bs-target="#personalizedAdvice" 
+                            aria-expanded="false" aria-controls="personalizedAdvice">
+                        <span><i class="fas fa-brain me-2 text-success"></i>Personalized Health Advice</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </h5>
                 <small class="text-muted">AI-generated insights based on your health patterns</small>
             </div>
-            <div class="card-body">
-                <!-- Debug information -->
-                <!-- DEBUG: {{ ai_advice }} -->
-                
-                <!-- Key Insights -->
-                {% if ai_advice and ai_advice.insights %}
-                <div class="mb-3">
-                    <h6 class="text-primary"><i class="fas fa-eye me-1"></i>Key Insights</h6>
-                    {% if ai_advice.insights is string %}
-                        <div class="alert alert-info py-2 mb-2">
-                            <small>{{ ai_advice.insights }}</small>
+            <div class="collapse" id="personalizedAdvice">
+                <div class="card-body">
+                    <!-- Loading state -->
+                    <div id="adviceLoadingState" class="text-center py-4" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Generating advice...</span>
                         </div>
-                    {% elif ai_advice.insights is sequence and ai_advice.insights is not string %}
-                        {% for insight in ai_advice.insights %}
-                            {% if insight and insight|string|length > 0 %}
-                            <div class="alert alert-info py-2 mb-2">
-                                <small>{{ insight }}</small>
+                        <p class="mt-2 text-muted">Analyzing your health patterns...</p>
+                    </div>
+                    
+                    <!-- Advice content -->
+                    <div id="adviceContent">
+                        {% if ai_advice %}
+                        <!-- Existing advice content -->
+                        <div id="actualAdviceContent">
+                            <!-- Refresh button -->
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0 text-success"><i class="fas fa-sparkles me-1"></i>Your Latest Health Insights</h6>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="generateHealthAdvice()">
+                                    <i class="fas fa-sync-alt me-1"></i>Refresh Advice
+                                </button>
+                            </div>
+                            
+                            <!-- Key Insights -->
+                            {% if ai_advice.insights %}
+                            <div id="adviceInsights" class="mb-3">
+                                <h6 class="text-primary"><i class="fas fa-eye me-1"></i>Key Insights</h6>
+                                <div id="insightsContent">
+                                    {% for insight in ai_advice.insights %}
+                                    <div class="alert alert-info advice-alert py-2 mb-2">
+                                        <small><i class="fas fa-lightbulb me-1"></i>{{ insight }}</small>
+                                    </div>
+                                    {% endfor %}
+                                </div>
                             </div>
                             {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        <div class="alert alert-info py-2 mb-2">
-                            <small>{{ ai_advice.insights|string }}</small>
-                        </div>
-                    {% endif %}
-                </div>
-                {% endif %}
-                
-                <!-- Priority Recommendations -->
-                {% if ai_advice and ai_advice.recommendations %}
-                <div class="mb-3">
-                    <h6 class="text-success"><i class="fas fa-star me-1"></i>Priority Recommendations</h6>
-                    {% if ai_advice.recommendations is string %}
-                        <div class="alert alert-success py-2 mb-2">
-                            <small><i class="fas fa-arrow-right me-1"></i>{{ ai_advice.recommendations }}</small>
-                        </div>
-                    {% elif ai_advice.recommendations is sequence and ai_advice.recommendations is not string %}
-                        {% for recommendation in ai_advice.recommendations %}
-                            {% if recommendation and recommendation|string|length > 0 %}
-                            <div class="alert alert-success py-2 mb-2">
-                                <small><i class="fas fa-arrow-right me-1"></i>{{ recommendation }}</small>
+                            
+                            <!-- Priority Recommendations -->
+                            {% if ai_advice.recommendations %}
+                            <div id="adviceRecommendations" class="mb-3">
+                                <h6 class="text-success"><i class="fas fa-star me-1"></i>Priority Recommendations</h6>
+                                <div id="recommendationsContent">
+                                    {% for recommendation in ai_advice.recommendations %}
+                                    <div class="alert alert-success advice-alert py-2 mb-2">
+                                        <small><i class="fas fa-arrow-right me-1"></i>{{ recommendation }}</small>
+                                    </div>
+                                    {% endfor %}
+                                </div>
                             </div>
                             {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        <div class="alert alert-success py-2 mb-2">
-                            <small><i class="fas fa-arrow-right me-1"></i>{{ ai_advice.recommendations|string }}</small>
-                        </div>
-                    {% endif %}
-                </div>
-                {% endif %}
-                
-                <!-- Quick Wins -->
-                {% if ai_advice and ai_advice.quick_wins %}
-                <div class="mb-3">
-                    <h6 class="text-warning"><i class="fas fa-bolt me-1"></i>Quick Wins</h6>
-                    {% if ai_advice.quick_wins is string %}
-                        <div class="alert alert-warning py-2 mb-2">
-                            <small><i class="fas fa-check me-1"></i>{{ ai_advice.quick_wins }}</small>
-                        </div>
-                    {% elif ai_advice.quick_wins is sequence and ai_advice.quick_wins is not string %}
-                        {% for quick_win in ai_advice.quick_wins %}
-                            {% if quick_win and quick_win|string|length > 0 %}
-                            <div class="alert alert-warning py-2 mb-2">
-                                <small><i class="fas fa-check me-1"></i>{{ quick_win }}</small>
+                            
+                            <!-- Quick Wins -->
+                            {% if ai_advice.quick_wins %}
+                            <div id="adviceQuickWins" class="mb-3">
+                                <h6 class="text-warning"><i class="fas fa-bolt me-1"></i>Quick Wins</h6>
+                                <div id="quickWinsContent">
+                                    {% for quick_win in ai_advice.quick_wins %}
+                                    <div class="alert alert-warning advice-alert py-2 mb-2">
+                                        <small><i class="fas fa-check me-1"></i>{{ quick_win }}</small>
+                                    </div>
+                                    {% endfor %}
+                                </div>
                             </div>
                             {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        <div class="alert alert-warning py-2 mb-2">
-                            <small><i class="fas fa-check me-1"></i>{{ ai_advice.quick_wins|string }}</small>
-                        </div>
-                    {% endif %}
-                </div>
-                {% endif %}
-                
-                <!-- Areas of Concern -->
-                {% if ai_advice and ai_advice.concerns %}
-                <div class="mb-3">
-                    <h6 class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Areas to Watch</h6>
-                    {% if ai_advice.concerns is string %}
-                        <div class="alert alert-danger py-2 mb-2">
-                            <small><i class="fas fa-info-circle me-1"></i>{{ ai_advice.concerns }}</small>
-                        </div>
-                    {% elif ai_advice.concerns is sequence and ai_advice.concerns is not string %}
-                        {% for concern in ai_advice.concerns %}
-                            {% if concern and concern|string|length > 0 %}
-                            <div class="alert alert-danger py-2 mb-2">
-                                <small><i class="fas fa-info-circle me-1"></i>{{ concern }}</small>
+                            
+                            <!-- Areas of Concern -->
+                            {% if ai_advice.concerns %}
+                            <div id="adviceConcerns" class="mb-3">
+                                <h6 class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Areas to Watch</h6>
+                                <div id="concernsContent">
+                                    {% for concern in ai_advice.concerns %}
+                                    <div class="alert alert-danger advice-alert py-2 mb-2">
+                                        <small><i class="fas fa-info-circle me-1"></i>{{ concern }}</small>
+                                    </div>
+                                    {% endfor %}
+                                </div>
                             </div>
                             {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        <div class="alert alert-danger py-2 mb-2">
-                            <small><i class="fas fa-info-circle me-1"></i>{{ ai_advice.concerns|string }}</small>
+                            
+                            <!-- Motivation Message -->
+                            {% if ai_advice.motivation %}
+                            <div id="adviceMotivation" class="mb-3">
+                                <div class="bg-light p-3 rounded">
+                                    <h6 class="text-primary mb-2"><i class="fas fa-heart me-1"></i>Stay Motivated</h6>
+                                    <p class="mb-0 small text-muted" id="motivationContent">{{ ai_advice.motivation }}</p>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Source Information -->
+                            <div id="adviceSource" class="mt-3 pt-2 border-top">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    <span id="sourceInfo">Generated by {{ 'AI Assistant' if ai_advice.source == 'gemini_ai' else 'Health Analytics' }}{% if ai_advice.generated_at %} at {{ ai_advice.generated_at[:19] | replace('T', ' ') }}{% endif %}</span>
+                                    <br><em>This advice is for informational purposes and not a substitute for professional medical consultation.</em>
+                                </small>
+                            </div>
                         </div>
-                    {% endif %}
-                </div>
-                {% endif %}
-                
-                <!-- Motivation Message -->
-                {% if ai_advice and ai_advice.motivation %}
-                <div class="bg-light p-3 rounded">
-                    <h6 class="text-primary mb-2"><i class="fas fa-heart me-1"></i>Stay Motivated</h6>
-                    <p class="mb-0 small text-muted">{{ ai_advice.motivation }}</p>
-                </div>
-                {% endif %}
-                
-                <!-- Source Information -->
-                {% if ai_advice %}
-                <div class="mt-3 pt-2 border-top">
-                    <small class="text-muted">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Generated by {{ 'AI Assistant' if ai_advice.source == 'gemini_ai' else 'Health Analytics' }}
-                        {% if ai_advice.generated_at %} 
-                        at {{ ai_advice.generated_at[:19] | replace('T', ' ') }}
+                        {% else %}
+                        <!-- No advice message -->
+                        <div class="text-center py-4" id="noAdviceMessage">
+                            <i class="fas fa-lightbulb fa-3x text-muted mb-3"></i>
+                            <h6 class="text-muted">No personalized advice generated yet</h6>
+                            <p class="text-muted small mb-3">Click the button below to generate AI-powered health insights based on your recent health data.</p>
+                            <button type="button" class="btn btn-primary" onclick="generateHealthAdvice()">
+                                <i class="fas fa-brain me-1"></i>Generate Health Advice
+                            </button>
+                        </div>
+                        
+                        <!-- Actual advice content (initially hidden) -->
+                        <div id="actualAdviceContent" style="display: none;">
+                            <!-- Refresh button -->
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0 text-success"><i class="fas fa-sparkles me-1"></i>Your Latest Health Insights</h6>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="generateHealthAdvice()">
+                                    <i class="fas fa-sync-alt me-1"></i>Refresh Advice
+                                </button>
+                            </div>
+                            
+                            <!-- Key Insights -->
+                            <div id="adviceInsights" class="mb-3" style="display: none;">
+                                <h6 class="text-primary"><i class="fas fa-eye me-1"></i>Key Insights</h6>
+                                <div id="insightsContent"></div>
+                            </div>
+                            
+                            <!-- Priority Recommendations -->
+                            <div id="adviceRecommendations" class="mb-3" style="display: none;">
+                                <h6 class="text-success"><i class="fas fa-star me-1"></i>Priority Recommendations</h6>
+                                <div id="recommendationsContent"></div>
+                            </div>
+                            
+                            <!-- Quick Wins -->
+                            <div id="adviceQuickWins" class="mb-3" style="display: none;">
+                                <h6 class="text-warning"><i class="fas fa-bolt me-1"></i>Quick Wins</h6>
+                                <div id="quickWinsContent"></div>
+                            </div>
+                            
+                            <!-- Areas of Concern -->
+                            <div id="adviceConcerns" class="mb-3" style="display: none;">
+                                <h6 class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Areas to Watch</h6>
+                                <div id="concernsContent"></div>
+                            </div>
+                            
+                            <!-- Motivation Message -->
+                            <div id="adviceMotivation" class="mb-3" style="display: none;">
+                                <div class="bg-light p-3 rounded">
+                                    <h6 class="text-primary mb-2"><i class="fas fa-heart me-1"></i>Stay Motivated</h6>
+                                    <p class="mb-0 small text-muted" id="motivationContent"></p>
+                                </div>
+                            </div>
+                            
+                            <!-- Source Information -->
+                            <div id="adviceSource" class="mt-3 pt-2 border-top" style="display: none;">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    <span id="sourceInfo"></span>
+                                    <br><em>This advice is for informational purposes and not a substitute for professional medical consultation.</em>
+                                </small>
+                            </div>
+                        </div>
                         {% endif %}
-                        <br><em>This advice is for informational purposes and not a substitute for professional medical consultation.</em>
-                    </small>
+                    </div>
                 </div>
-                {% endif %}
             </div>
         </div>
-        {% endif %}
         
         <!-- Quick Actions -->
         <div class="card mb-4">
@@ -709,8 +756,8 @@ function triggerAIOptimization() {
 
 // Remember collapsible section states
 document.addEventListener('DOMContentLoaded', function() {
-    // List of collapsible sections to remember
-    const collapsibleSections = ['comprehensiveMetrics', 'historicalData'];
+    // List of collapsible sections to remember (including new advice section)
+    const collapsibleSections = ['comprehensiveMetrics', 'historicalData', 'personalizedAdvice'];
     
     // Restore saved states
     collapsibleSections.forEach(function(sectionId) {
@@ -765,12 +812,160 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// Function to generate health advice via AJAX
+function generateHealthAdvice() {
+    // Show loading state
+    document.getElementById('adviceLoadingState').style.display = 'block';
+    
+    // Hide existing content
+    const noAdviceMessage = document.getElementById('noAdviceMessage');
+    const actualAdviceContent = document.getElementById('actualAdviceContent');
+    
+    if (noAdviceMessage) {
+        noAdviceMessage.style.display = 'none';
+    }
+    if (actualAdviceContent) {
+        actualAdviceContent.style.display = 'none';
+    }
+    
+    // Make AJAX request to generate advice
+    fetch('{{ url_for("main.generate_personalized_advice") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Hide loading state
+        document.getElementById('adviceLoadingState').style.display = 'none';
+        
+        if (data.success && data.ai_advice) {
+            // Show advice content
+            displayAdviceContent(data.ai_advice);
+        } else {
+            // Show error message
+            showAdviceError(data.error || 'Failed to generate health advice');
+        }
+    })
+    .catch(error => {
+        console.error('Error generating advice:', error);
+        document.getElementById('adviceLoadingState').style.display = 'none';
+        showAdviceError('Network error occurred while generating advice');
+    });
+}
+
+// Function to display advice content
+function displayAdviceContent(advice) {
+    // Show the actual advice content
+    const actualAdviceContent = document.getElementById('actualAdviceContent');
+    if (actualAdviceContent) {
+        actualAdviceContent.style.display = 'block';
+    }
+    
+    // Hide no advice message
+    const noAdviceMessage = document.getElementById('noAdviceMessage');
+    if (noAdviceMessage) {
+        noAdviceMessage.style.display = 'none';
+    }
+    
+    // Helper function to create alert elements for content
+    function createAlertContent(content, alertClass, iconClass) {
+        if (!content) return '';
+        
+        if (typeof content === 'string') {
+            return `<div class="alert ${alertClass} advice-alert py-2 mb-2">
+                        <small><i class="${iconClass} me-1"></i>${content}</small>
+                    </div>`;
+        } else if (Array.isArray(content)) {
+            return content.filter(item => item && item.length > 0)
+                         .map(item => `<div class="alert ${alertClass} advice-alert py-2 mb-2">
+                                          <small><i class="${iconClass} me-1"></i>${item}</small>
+                                       </div>`)
+                         .join('');
+        }
+        return '';
+    }
+    
+    // Display insights
+    if (advice.insights) {
+        const insightsContent = createAlertContent(advice.insights, 'alert-info', 'fas fa-lightbulb');
+        if (insightsContent) {
+            document.getElementById('insightsContent').innerHTML = insightsContent;
+            document.getElementById('adviceInsights').style.display = 'block';
+        }
+    }
+    
+    // Display recommendations
+    if (advice.recommendations) {
+        const recommendationsContent = createAlertContent(advice.recommendations, 'alert-success', 'fas fa-arrow-right');
+        if (recommendationsContent) {
+            document.getElementById('recommendationsContent').innerHTML = recommendationsContent;
+            document.getElementById('adviceRecommendations').style.display = 'block';
+        }
+    }
+    
+    // Display quick wins
+    if (advice.quick_wins) {
+        const quickWinsContent = createAlertContent(advice.quick_wins, 'alert-warning', 'fas fa-check');
+        if (quickWinsContent) {
+            document.getElementById('quickWinsContent').innerHTML = quickWinsContent;
+            document.getElementById('adviceQuickWins').style.display = 'block';
+        }
+    }
+    
+    // Display concerns
+    if (advice.concerns) {
+        const concernsContent = createAlertContent(advice.concerns, 'alert-danger', 'fas fa-info-circle');
+        if (concernsContent) {
+            document.getElementById('concernsContent').innerHTML = concernsContent;
+            document.getElementById('adviceConcerns').style.display = 'block';
+        }
+    }
+    
+    // Display motivation
+    if (advice.motivation) {
+        document.getElementById('motivationContent').textContent = advice.motivation;
+        document.getElementById('adviceMotivation').style.display = 'block';
+    }
+    
+    // Display source information
+    if (advice.source || advice.generated_at) {
+        const sourceText = `Generated by ${advice.source === 'gemini_ai' ? 'AI Assistant' : 'Health Analytics'}${advice.generated_at ? ' at ' + new Date(advice.generated_at).toLocaleString() : ''}`;
+        document.getElementById('sourceInfo').textContent = sourceText;
+        document.getElementById('adviceSource').style.display = 'block';
+    }
+}
+
+// Function to show error message
+function showAdviceError(errorMessage) {
+    const noAdviceMessage = document.getElementById('noAdviceMessage');
+    if (noAdviceMessage) {
+        noAdviceMessage.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                <h6 class="text-warning">Unable to Generate Advice</h6>
+                <p class="text-muted small mb-3">${errorMessage}</p>
+                <button type="button" class="btn btn-primary" onclick="generateHealthAdvice()">
+                    <i class="fas fa-redo me-1"></i>Try Again
+                </button>
+            </div>
+        `;
+        noAdviceMessage.style.display = 'block';
+    }
+    
+    const actualAdviceContent = document.getElementById('actualAdviceContent');
+    if (actualAdviceContent) {
+        actualAdviceContent.style.display = 'none';
+    }
+}
+
 // Auto-refresh dashboard every 5 minutes (but preserve collapse states)
 setInterval(function() {
     // Only refresh if user is still active
     if (document.hasFocus()) {
         // Save current collapse states before refresh
-        const collapsibleSections = ['comprehensiveMetrics', 'historicalData'];
+        const collapsibleSections = ['comprehensiveMetrics', 'historicalData', 'personalizedAdvice'];
         collapsibleSections.forEach(function(sectionId) {
             const element = document.getElementById(sectionId);
             if (element && element.classList.contains('show')) {

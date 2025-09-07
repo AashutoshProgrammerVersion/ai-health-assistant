@@ -10,7 +10,7 @@ user-friendly interfaces for data entry with proper constraints.
 from flask_wtf import FlaskForm
 
 # WTFORMS FIELD IMPORTS - Form input field types
-from wtforms import FloatField, IntegerField, SelectField, SubmitField, StringField, TextAreaField, BooleanField, DateTimeField
+from wtforms import FloatField, IntegerField, SelectField, SubmitField, StringField, TextAreaField, BooleanField, DateTimeField, DateField
 """
 'from wtforms import FloatField, IntegerField, SelectField, SubmitField' - Form field types
 'FloatField' - Input field for decimal numbers (7.5 hours, 2.3 liters)
@@ -40,6 +40,20 @@ class HealthDataForm(FlaskForm):
     Based on health metrics blueprint for consistent data collection
     """
     
+    # DATE AND SOURCE - When and how data was logged
+    date_logged = DateField('Date', validators=[DataRequired()], 
+                           render_kw={"type": "date"})
+    
+    data_source = SelectField('Data Source', 
+                             choices=[('manual', 'Manual Entry'),
+                                     ('file_upload', 'File Upload'),
+                                     ('fitbit', 'Fitbit'),
+                                     ('apple_health', 'Apple Health'),
+                                     ('samsung_health', 'Samsung Health'),
+                                     ('garmin', 'Garmin'),
+                                     ('other', 'Other')],
+                             default='manual')
+    
     # ACTIVITY METRICS - Movement and exercise tracking
     steps = IntegerField('Daily Steps', 
                         validators=[Optional(), NumberRange(min=0, max=50000)],
@@ -49,7 +63,7 @@ class HealthDataForm(FlaskForm):
                             validators=[Optional(), NumberRange(min=0, max=100)],
                             render_kw={"placeholder": "e.g., 6.5"})
     
-    calories_total = IntegerField('Total Calories Burned', 
+    calories_burned = IntegerField('Calories Burned', 
                                  validators=[Optional(), NumberRange(min=0, max=8000)],
                                  render_kw={"placeholder": "e.g., 2200"})
     
@@ -57,9 +71,13 @@ class HealthDataForm(FlaskForm):
                                  validators=[Optional(), NumberRange(min=0, max=1440)],
                                  render_kw={"placeholder": "e.g., 45"})
     
-    floors_climbed = IntegerField('Floors Climbed', 
-                                 validators=[Optional(), NumberRange(min=0, max=200)],
-                                 render_kw={"placeholder": "e.g., 8"})
+    exercise_type = StringField('Exercise Type', 
+                               validators=[Optional(), Length(max=100)],
+                               render_kw={"placeholder": "e.g., Running, Yoga"})
+    
+    exercise_duration_minutes = IntegerField('Exercise Duration (minutes)', 
+                                           validators=[Optional(), NumberRange(min=0, max=480)],
+                                           render_kw={"placeholder": "e.g., 60"})
     
     # HEART RATE METRICS - Cardiovascular health indicators
     heart_rate_avg = IntegerField('Average Heart Rate (BPM)', 
@@ -83,51 +101,80 @@ class HealthDataForm(FlaskForm):
                                      validators=[Optional(), NumberRange(min=0, max=24)],
                                      render_kw={"placeholder": "e.g., 7.5"})
     
-    sleep_quality_score = IntegerField('Sleep Quality Score (0-100)', 
-                                      validators=[Optional(), NumberRange(min=0, max=100)],
-                                      render_kw={"placeholder": "e.g., 85"})
+    sleep_quality_score = IntegerField('Sleep Quality Score (1-10)', 
+                                      validators=[Optional(), NumberRange(min=1, max=10)],
+                                      render_kw={"placeholder": "e.g., 8"})
     
-    sleep_deep_minutes = IntegerField('Deep Sleep (minutes)', 
-                                     validators=[Optional(), NumberRange(min=0, max=600)],
-                                     render_kw={"placeholder": "e.g., 90"})
+    deep_sleep_hours = FloatField('Deep Sleep (hours)', 
+                                 validators=[Optional(), NumberRange(min=0, max=12)],
+                                 render_kw={"placeholder": "e.g., 1.5"})
     
-    sleep_light_minutes = IntegerField('Light Sleep (minutes)', 
-                                      validators=[Optional(), NumberRange(min=0, max=600)],
-                                      render_kw={"placeholder": "e.g., 240"})
-    
-    sleep_rem_minutes = IntegerField('REM Sleep (minutes)', 
-                                    validators=[Optional(), NumberRange(min=0, max=300)],
-                                    render_kw={"placeholder": "e.g., 105"})
+    rem_sleep_hours = FloatField('REM Sleep (hours)', 
+                                validators=[Optional(), NumberRange(min=0, max=8)],
+                                render_kw={"placeholder": "e.g., 1.75"})
     
     sleep_awake_minutes = IntegerField('Time Awake in Bed (minutes)', 
                                       validators=[Optional(), NumberRange(min=0, max=300)],
                                       render_kw={"placeholder": "e.g., 15"})
     
     # ADVANCED HEALTH METRICS - Premium device metrics
-    blood_oxygen_percent = IntegerField('Blood Oxygen SpO2 (%)', 
-                                       validators=[Optional(), NumberRange(min=70, max=100)],
-                                       render_kw={"placeholder": "e.g., 98"})
+    oxygen_saturation = IntegerField('Blood Oxygen SpO2 (%)', 
+                                   validators=[Optional(), NumberRange(min=70, max=100)],
+                                   render_kw={"placeholder": "e.g., 98"})
     
-    stress_level = IntegerField('Stress Level (0-100)', 
-                               validators=[Optional(), NumberRange(min=0, max=100)],
-                               render_kw={"placeholder": "e.g., 25"})
+    systolic_bp = IntegerField('Systolic Blood Pressure (mmHg)', 
+                              validators=[Optional(), NumberRange(min=60, max=250)],
+                              render_kw={"placeholder": "e.g., 120"})
+    
+    diastolic_bp = IntegerField('Diastolic Blood Pressure (mmHg)', 
+                               validators=[Optional(), NumberRange(min=40, max=150)],
+                               render_kw={"placeholder": "e.g., 80"})
+    
+    stress_level = IntegerField('Stress Level (1-10)', 
+                               validators=[Optional(), NumberRange(min=1, max=10)],
+                               render_kw={"placeholder": "e.g., 3"})
     
     body_temperature = FloatField('Body Temperature (°C)', 
                                  validators=[Optional(), NumberRange(min=35, max=42)],
                                  render_kw={"placeholder": "e.g., 36.8"})
+    
+    # NUTRITION METRICS - Daily intake tracking
+    calories_consumed = IntegerField('Calories Consumed', 
+                                    validators=[Optional(), NumberRange(min=0, max=10000)],
+                                    render_kw={"placeholder": "e.g., 2000"})
+    
+    protein_grams = FloatField('Protein (grams)', 
+                              validators=[Optional(), NumberRange(min=0, max=500)],
+                              render_kw={"placeholder": "e.g., 80.5"})
+    
+    carbs_grams = FloatField('Carbohydrates (grams)', 
+                            validators=[Optional(), NumberRange(min=0, max=1000)],
+                            render_kw={"placeholder": "e.g., 250.0"})
+    
+    fat_grams = FloatField('Fat (grams)', 
+                          validators=[Optional(), NumberRange(min=0, max=300)],
+                          render_kw={"placeholder": "e.g., 65.5"})
+    
+    fiber_grams = FloatField('Fiber (grams)', 
+                            validators=[Optional(), NumberRange(min=0, max=100)],
+                            render_kw={"placeholder": "e.g., 25.0"})
     
     # BODY COMPOSITION METRICS - Smart scale metrics
     weight_kg = FloatField('Weight (kg)', 
                           validators=[Optional(), NumberRange(min=30, max=300)],
                           render_kw={"placeholder": "e.g., 70.5"})
     
-    body_fat_percent = FloatField('Body Fat (%)', 
-                                 validators=[Optional(), NumberRange(min=5, max=60)],
-                                 render_kw={"placeholder": "e.g., 18.5"})
+    body_fat_percentage = FloatField('Body Fat (%)', 
+                                   validators=[Optional(), NumberRange(min=5, max=60)],
+                                   render_kw={"placeholder": "e.g., 18.5"})
     
     muscle_mass_kg = FloatField('Muscle Mass (kg)', 
                                validators=[Optional(), NumberRange(min=20, max=100)],
                                render_kw={"placeholder": "e.g., 45.2"})
+    
+    bmi = FloatField('BMI', 
+                    validators=[Optional(), NumberRange(min=10, max=50)],
+                    render_kw={"placeholder": "e.g., 22.5"})
     
     # LIFESTYLE METRICS - Daily wellness tracking
     water_intake_liters = FloatField('Water Intake (liters)', 
@@ -154,30 +201,25 @@ class HealthDataForm(FlaskForm):
                               coerce=lambda x: int(x) if x else None,
                               validators=[Optional()])
     
-    # EXERCISE SESSION DETAILS - Workout-specific metrics
-    workout_type = SelectField('Workout Type', 
-                              choices=[(None, 'Select...'),
-                                      ('cardio', 'Cardio'), ('strength', 'Strength Training'),
-                                      ('yoga', 'Yoga'), ('running', 'Running'),
-                                      ('cycling', 'Cycling'), ('swimming', 'Swimming'),
-                                      ('walking', 'Walking'), ('other', 'Other')],
-                              validators=[Optional()])
+    meditation_minutes = IntegerField('Meditation (minutes)', 
+                                     validators=[Optional(), NumberRange(min=0, max=300)],
+                                     render_kw={"placeholder": "e.g., 20"})
     
-    workout_duration_minutes = IntegerField('Workout Duration (minutes)', 
-                                           validators=[Optional(), NumberRange(min=0, max=480)],
-                                           render_kw={"placeholder": "e.g., 60"})
+    screen_time_hours = FloatField('Screen Time (hours)', 
+                                  validators=[Optional(), NumberRange(min=0, max=24)],
+                                  render_kw={"placeholder": "e.g., 6.5"})
     
-    workout_intensity = SelectField('Workout Intensity', 
-                                   choices=[(None, 'Select...'),
-                                           ('low', 'Low'), ('moderate', 'Moderate'), ('high', 'High')],
-                                   validators=[Optional()])
+    social_interactions = IntegerField('Social Interactions', 
+                                      validators=[Optional(), NumberRange(min=0, max=50)],
+                                      render_kw={"placeholder": "e.g., 5"})
     
-    workout_calories = IntegerField('Workout Calories Burned', 
-                                   validators=[Optional(), NumberRange(min=0, max=2000)],
-                                   render_kw={"placeholder": "e.g., 450"})
+    # ADDITIONAL NOTES
+    notes = TextAreaField('Notes', 
+                         validators=[Optional(), Length(max=1000)],
+                         render_kw={"placeholder": "Optional notes about this health data entry", "rows": 3})
     
     # FORM SUBMISSION BUTTON
-    submit = SubmitField('Log Health Data')
+    submit = SubmitField('Update Health Data')
 
 # CALENDAR EVENT FORM - Form for creating and editing calendar events
 class CalendarEventForm(FlaskForm):

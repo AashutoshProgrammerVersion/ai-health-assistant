@@ -197,14 +197,90 @@ def dashboard():
         }
     }
     
-    ai_advice = get_health_ai_service().generate_personalized_advice(user_context, health_patterns)
+    # LOAD EXISTING PERSONALIZED ADVICE OR GENERATE IF NONE EXISTS
+    existing_advice = current_user.personalized_advice
+    ai_advice = None
     
-    # Debug logging for AI advice
-    logger.info(f"AI advice generated: {ai_advice}")
-    logger.info(f"AI advice type: {type(ai_advice)}")
-    if isinstance(ai_advice, dict):
-        for key, value in ai_advice.items():
-            logger.info(f"  {key}: {type(value)} = {value}")
+    if existing_advice:
+        # User has existing advice, load it
+        ai_advice = existing_advice.to_dict()
+    else:
+        # No existing advice, generate it automatically for first time
+        if len(recent_data) >= 1:  # Only if user has some health data
+            try:
+                user_context = {
+                    'recent_health': [
+                        {
+                            'date': data.date_logged.isoformat(),
+                            # Activity Metrics
+                            'steps': data.steps,
+                            'distance_km': data.distance_km,
+                            'calories_total': data.calories_total,
+                            'active_minutes': data.active_minutes,
+                            'floors_climbed': data.floors_climbed,
+                            
+                            # Heart Rate Metrics
+                            'heart_rate_avg': data.heart_rate_avg,
+                            'heart_rate_resting': data.heart_rate_resting,
+                            'heart_rate_max': data.heart_rate_max,
+                            'heart_rate_variability': data.heart_rate_variability,
+                            
+                            # Sleep Metrics
+                            'sleep_duration_hours': data.sleep_duration_hours,
+                            'sleep_quality_score': data.sleep_quality_score,
+                            'sleep_deep_minutes': data.sleep_deep_minutes,
+                            'sleep_light_minutes': data.sleep_light_minutes,
+                            'sleep_rem_minutes': data.sleep_rem_minutes,
+                            'sleep_awake_minutes': data.sleep_awake_minutes,
+                            
+                            # Advanced Health Metrics
+                            'blood_oxygen_percent': data.blood_oxygen_percent,
+                            'stress_level': data.stress_level,
+                            'body_temperature': data.body_temperature,
+                            
+                            # Body Composition Metrics
+                            'weight_kg': data.weight_kg,
+                            'body_fat_percent': data.body_fat_percent,
+                            'muscle_mass_kg': data.muscle_mass_kg,
+                            
+                            # Lifestyle Metrics
+                            'water_intake_liters': data.water_intake_liters,
+                            'mood_score': data.mood_score,
+                            'energy_level': data.energy_level,
+                            
+                            # Exercise Session Details
+                            'workout_type': data.workout_type,
+                            'workout_duration_minutes': data.workout_duration_minutes,
+                            'workout_intensity': data.workout_intensity,
+                            'workout_calories': data.workout_calories
+                        } for data in recent_data[:7]  # Last 7 days for context
+                    ],
+                    'health_score': health_score,
+                    'goals': {
+                        'water_liters': preferences.daily_water_goal,
+                        'sleep_hours': preferences.daily_sleep_goal,
+                        'steps': preferences.daily_steps_goal,
+                        'activity_minutes': preferences.daily_activity_goal
+                    }
+                }
+                
+                # Generate new advice
+                ai_advice = get_health_ai_service().generate_personalized_advice(user_context, health_patterns)
+                
+                # Save to database for persistence
+                if ai_advice:
+                    from app.models import PersonalizedHealthAdvice
+                    advice_record = PersonalizedHealthAdvice.from_dict(
+                        user_id=current_user.id,
+                        advice_dict=ai_advice,
+                        health_score=health_score
+                    )
+                    db.session.add(advice_record)
+                    db.session.commit()
+                    
+            except Exception as e:
+                logger.error(f"Error auto-generating initial advice: {e}")
+                ai_advice = None
     
     # GET UPCOMING CALENDAR EVENTS (NEXT 7 DAYS)
     upcoming_events = current_user.calendar_events.filter(
@@ -664,6 +740,128 @@ def generate_smart_reminders():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# AI ADVICE GENERATION ROUTE - Generate advice on-demand
+@bp.route('/ai/generate_advice', methods=['POST'])
+@login_required
+def generate_personalized_advice():
+    """
+    Generate personalized health advice on-demand
+    Only called when user explicitly requests new advice
+    """
+    try:
+        # GET RECENT HEALTH DATA FOR ANALYSIS
+        recent_data = current_user.health_data.order_by(HealthData.date_logged.desc()).limit(30).all()
+        
+        if not recent_data:
+            return jsonify({'error': 'No health data available for analysis'}), 400
+            
+        # GET USER PREFERENCES
+        preferences = current_user.preferences
+        if not preferences:
+            preferences = UserPreferences(user_id=current_user.id)
+            db.session.add(preferences)
+            db.session.commit()
+        
+        # ANALYZE HEALTH PATTERNS WITH AI
+        health_patterns = get_health_ai_service().analyze_health_patterns(recent_data) if len(recent_data) >= 7 else {}
+        
+        # GENERATE PERSONALIZED AI ADVICE
+        user_context = {
+            'recent_health': [
+                {
+                    'date': data.date_logged.isoformat(),
+                    # Activity Metrics
+                    'steps': data.steps,
+                    'distance_km': data.distance_km,
+                    'calories_total': data.calories_total,
+                    'active_minutes': data.active_minutes,
+                    'floors_climbed': data.floors_climbed,
+                    
+                    # Heart Rate Metrics
+                    'heart_rate_avg': data.heart_rate_avg,
+                    'heart_rate_resting': data.heart_rate_resting,
+                    'heart_rate_max': data.heart_rate_max,
+                    'heart_rate_variability': data.heart_rate_variability,
+                    
+                    # Sleep Metrics
+                    'sleep_duration_hours': data.sleep_duration_hours,
+                    'sleep_quality_score': data.sleep_quality_score,
+                    'sleep_deep_minutes': data.sleep_deep_minutes,
+                    'sleep_light_minutes': data.sleep_light_minutes,
+                    'sleep_rem_minutes': data.sleep_rem_minutes,
+                    'sleep_awake_minutes': data.sleep_awake_minutes,
+                    
+                    # Advanced Health Metrics
+                    'blood_oxygen_percent': data.blood_oxygen_percent,
+                    'stress_level': data.stress_level,
+                    'body_temperature': data.body_temperature,
+                    
+                    # Body Composition Metrics
+                    'weight_kg': data.weight_kg,
+                    'body_fat_percent': data.body_fat_percent,
+                    'muscle_mass_kg': data.muscle_mass_kg,
+                    
+                    # Lifestyle Metrics
+                    'water_intake_liters': data.water_intake_liters,
+                    'mood_score': data.mood_score,
+                    'energy_level': data.energy_level,
+                    
+                    # Exercise Session Details
+                    'workout_type': data.workout_type,
+                    'workout_duration_minutes': data.workout_duration_minutes,
+                    'workout_intensity': data.workout_intensity,
+                    'workout_calories': data.workout_calories
+                } for data in recent_data[:7]  # Last 7 days for context
+            ],
+            'health_score': get_health_ai_service().calculate_health_score(recent_data),
+            'goals': {
+                'water_liters': preferences.daily_water_goal,
+                'sleep_hours': preferences.daily_sleep_goal,
+                'steps': preferences.daily_steps_goal,
+                'activity_minutes': preferences.daily_activity_goal
+            }
+        }
+        
+        ai_advice = get_health_ai_service().generate_personalized_advice(user_context, health_patterns)
+        
+        # Save or update advice in database for persistence
+        if ai_advice:
+            from app.models import PersonalizedHealthAdvice
+            
+            # Check if user already has advice
+            existing_advice = current_user.personalized_advice
+            
+            if existing_advice:
+                # Update existing advice
+                existing_advice.insights = json.dumps(ai_advice.get('insights', []))
+                existing_advice.recommendations = json.dumps(ai_advice.get('recommendations', []))
+                existing_advice.quick_wins = json.dumps(ai_advice.get('quick_wins', []))
+                existing_advice.concerns = json.dumps(ai_advice.get('concerns', []))
+                existing_advice.motivation = ai_advice.get('motivation', '')
+                existing_advice.source = ai_advice.get('source', 'gemini_ai')
+                existing_advice.health_score_at_generation = get_health_ai_service().calculate_health_score(recent_data)
+                existing_advice.generated_at = datetime.utcnow()
+            else:
+                # Create new advice record
+                advice_record = PersonalizedHealthAdvice.from_dict(
+                    user_id=current_user.id,
+                    advice_dict=ai_advice,
+                    health_score=get_health_ai_service().calculate_health_score(recent_data)
+                )
+                db.session.add(advice_record)
+            
+            db.session.commit()
+        
+        # Add timestamp to advice for frontend
+        if isinstance(ai_advice, dict):
+            ai_advice['generated_at'] = datetime.utcnow().isoformat()
+        
+        return jsonify({'success': True, 'ai_advice': ai_advice})
+        
+    except Exception as e:
+        logger.error(f"Error generating AI advice: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # USER PREFERENCES ROUTES - App and AI behavior settings
 
 @bp.route('/preferences', methods=['GET', 'POST'])
@@ -821,6 +1019,139 @@ def health_data_history():
                          title='Health Data History',
                          history=history,
                          now=datetime.utcnow())
+
+@bp.route('/health_data/manage')
+@login_required
+def manage_health_data():
+    """
+    View and manage all health data entries
+    Shows both manual entries and file uploads with edit/delete options
+    """
+    # Get all health data for the user
+    page = request.args.get('page', 1, type=int)
+    per_page = 20  # Show 20 entries per page
+    
+    health_data = current_user.health_data.order_by(
+        HealthData.date_logged.desc(), 
+        HealthData.created_at.desc()
+    ).paginate(
+        page=page, 
+        per_page=per_page, 
+        error_out=False
+    )
+    
+    return render_template('manage_health_data.html',
+                         title='Manage Health Data',
+                         health_data=health_data)
+
+@bp.route('/health_data/edit/<int:data_id>', methods=['GET', 'POST'])
+@login_required
+def edit_health_data(data_id):
+    """
+    Edit existing health data entry
+    Allows users to modify their health data entries
+    """
+    # Get the health data entry (ensure it belongs to current user)
+    health_data = HealthData.query.filter_by(id=data_id, user_id=current_user.id).first_or_404()
+    
+    # Create form with existing data
+    form = HealthDataForm(obj=health_data)
+    
+    if form.validate_on_submit():
+        # Update all the fields from the form
+        health_data.steps = form.steps.data
+        health_data.distance_km = form.distance_km.data
+        health_data.calories_total = form.calories_total.data
+        health_data.active_minutes = form.active_minutes.data
+        health_data.floors_climbed = form.floors_climbed.data
+        
+        # Heart Rate Metrics
+        health_data.heart_rate_avg = form.heart_rate_avg.data
+        health_data.heart_rate_resting = form.heart_rate_resting.data
+        health_data.heart_rate_max = form.heart_rate_max.data
+        health_data.heart_rate_variability = form.heart_rate_variability.data
+        
+        # Sleep Metrics
+        health_data.sleep_duration_hours = form.sleep_duration_hours.data
+        health_data.sleep_quality_score = form.sleep_quality_score.data
+        health_data.sleep_deep_minutes = form.sleep_deep_minutes.data
+        health_data.sleep_light_minutes = form.sleep_light_minutes.data
+        health_data.sleep_rem_minutes = form.sleep_rem_minutes.data
+        health_data.sleep_awake_minutes = form.sleep_awake_minutes.data
+        
+        # Advanced Health Metrics
+        health_data.blood_oxygen_percent = form.blood_oxygen_percent.data
+        health_data.stress_level = form.stress_level.data
+        health_data.body_temperature = form.body_temperature.data
+        
+        # Body Composition Metrics
+        health_data.weight_kg = form.weight_kg.data
+        health_data.body_fat_percent = form.body_fat_percent.data
+        health_data.muscle_mass_kg = form.muscle_mass_kg.data
+        
+        # Lifestyle Metrics
+        health_data.water_intake_liters = form.water_intake_liters.data
+        health_data.mood_score = form.mood_score.data
+        health_data.energy_level = form.energy_level.data
+        
+        # Exercise Session Details
+        health_data.workout_type = form.workout_type.data
+        health_data.workout_duration_minutes = form.workout_duration_minutes.data
+        health_data.workout_intensity = form.workout_intensity.data
+        health_data.workout_calories = form.workout_calories.data
+        
+        # Update metadata
+        health_data.updated_at = datetime.utcnow()
+        health_data.data_source = 'manual'  # Mark as manually edited
+        
+        db.session.commit()
+        flash(f'Health data for {health_data.date_logged.strftime("%Y-%m-%d")} has been updated!', 'success')
+        return redirect(url_for('main.manage_health_data'))
+    
+    return render_template('edit_health_data.html', 
+                         title='Edit Health Data', 
+                         form=form, 
+                         health_data=health_data)
+
+@bp.route('/health_data/delete/<int:data_id>', methods=['POST'])
+@login_required
+def delete_health_data(data_id):
+    """
+    Delete health data entry
+    Allows users to remove their health data entries
+    """
+    # Get the health data entry (ensure it belongs to current user)
+    health_data = HealthData.query.filter_by(id=data_id, user_id=current_user.id).first_or_404()
+    date_logged = health_data.date_logged.strftime('%Y-%m-%d')
+    
+    db.session.delete(health_data)
+    db.session.commit()
+    
+    flash(f'Health data for {date_logged} has been deleted.', 'success')
+    return redirect(url_for('main.manage_health_data'))
+
+@bp.route('/health_data/delete_upload/<int:data_id>', methods=['POST'])
+@login_required
+def delete_health_upload(data_id):
+    """
+    Delete health data upload entry (file upload)
+    Allows users to remove their uploaded health data
+    """
+    # Get the health data entry (ensure it belongs to current user)
+    health_data = HealthData.query.filter_by(id=data_id, user_id=current_user.id).first_or_404()
+    
+    # Only allow deletion of file uploads, not manual entries
+    if health_data.data_source != 'file_upload':
+        flash('Only uploaded health data can be deleted from this page.', 'error')
+        return redirect(url_for('main.health_data_history'))
+    
+    extraction_date = health_data.extraction_date.strftime('%Y-%m-%d %H:%M') if health_data.extraction_date else 'Unknown date'
+    
+    db.session.delete(health_data)
+    db.session.commit()
+    
+    flash(f'Health data upload from {extraction_date} has been deleted.', 'success')
+    return redirect(url_for('main.health_data_history'))
 
 # HELPER FUNCTION - Calculate overall health score from recent data
 def calculate_health_score(health_data_list):
@@ -1090,3 +1421,64 @@ def disconnect_google_calendar():
         flash(f'Error disconnecting Google Calendar: {str(e)}', 'error')
     
     return redirect(url_for('main.user_preferences'))
+
+@bp.route('/health_data/delete_processing/<int:processing_id>', methods=['DELETE'])
+@login_required
+def delete_processing_record(processing_id):
+    """
+    Delete a processing record and all associated health data from that upload session
+    """
+    try:
+        # Get the processing record (summary record from file upload)
+        processing_record = HealthData.query.filter_by(
+            id=processing_id, 
+            user_id=current_user.id, 
+            data_source='file_upload'
+        ).first()
+        
+        if not processing_record:
+            return jsonify({'success': False, 'error': 'Processing record not found'}), 404
+        
+        # Get the upload session ID to find all related health data
+        # Handle both old records (without upload_session_id) and new records (with upload_session_id)
+        upload_session_id = getattr(processing_record, 'upload_session_id', None)
+        
+        if upload_session_id:
+            # New records with session ID - delete all records from this session
+            related_records = HealthData.query.filter_by(
+                user_id=current_user.id,
+                upload_session_id=upload_session_id
+            ).all()
+        else:
+            # Old records without session ID - use extraction_date to find related records
+            extraction_date = processing_record.extraction_date
+            if extraction_date:
+                related_records = HealthData.query.filter_by(
+                    user_id=current_user.id,
+                    extraction_date=extraction_date
+                ).all()
+            else:
+                # If no extraction date either, just delete this record
+                related_records = [processing_record]
+        
+        # Count records for response
+        deleted_count = len(related_records)
+        
+        # Delete all related records
+        for record in related_records:
+            db.session.delete(record)
+        
+        db.session.commit()
+        
+        logger.info(f"Deleted processing record {processing_id} and {deleted_count} related health data entries for user {current_user.id}")
+        
+        return jsonify({
+            'success': True, 
+            'deleted_count': deleted_count,
+            'message': f'Successfully deleted processing record and {deleted_count} related health data entries'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error deleting processing record {processing_id}: {e}")
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Failed to delete processing record'}), 500

@@ -1,9 +1,15 @@
 // JavaScript for Health Assistant App
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Auto-hide alerts after 5 seconds
+    // Auto-hide alerts after 5 seconds (excluding advice content)
     const alerts = document.querySelectorAll('.alert');
     alerts.forEach(function(alert) {
+        // Skip alerts that are inside the personalized advice section or have advice-alert class
+        if (alert.closest('#personalizedAdvice') || 
+            alert.closest('#adviceContent') || 
+            alert.classList.contains('advice-alert')) {
+            return;
+        }
         setTimeout(function() {
             if (alert) {
                 alert.style.transition = 'opacity 0.5s';

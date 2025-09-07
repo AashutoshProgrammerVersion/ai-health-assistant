@@ -17,7 +17,7 @@ import json
 import logging
 import socket
 import time
-from datetime import datetime, timedelta, time as dt_time
+from datetime import datetime, timedelta, time as dt_time, timezone
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 
@@ -883,119 +883,178 @@ class GoogleCalendarService:
             # Build service with proper credentials handling and timeout configuration
             credentials = Credentials.from_authorized_user_info(credentials_dict)
             
-            # Refresh credentials if needed
+            # Log credential status for debugging
+            logger.info(f"Credentials expired: {credentials.expired}")
+            if hasattr(credentials, 'expiry') and credentials.expiry:
+                logger.info(f"Credentials expire at: {credentials.expiry}")
+            
+            # Refresh credentials if needed with enhanced error handling
             if credentials.expired and credentials.refresh_token:
-                request = GoogleRequest()
-                credentials.refresh(request)
-                logger.info("Refreshed Google Calendar credentials")
+                try:
+                    request = GoogleRequest()
+                    credentials.refresh(request)
+                    logger.info("Successfully refreshed Google Calendar credentials")
+                except Exception as refresh_error:
+                    logger.error(f"Failed to refresh credentials: {refresh_error}")
+                    return {
+                        'success': False,
+                        'error': f'Failed to refresh Google Calendar credentials: {str(refresh_error)}',
+                        'synced_count': 0
+                    }
+            elif credentials.expired and not credentials.refresh_token:
+                logger.error("Credentials expired and no refresh token available")
+                return {
+                    'success': False,
+                    'error': 'Google Calendar credentials expired. Please re-authorize the application.',
+                    'synced_count': 0
+                }
             
             # Create HTTP adapter with timeout settings
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             
-            # Method 1: Try with httplib2 with explicit timeout
+            # Build Google Calendar service with timeout configuration
             try:
-                # Create httplib2 Http object with timeout
-                http = httplib2.Http(timeout=25)  # 25 second timeout
-                http = credentials.authorize(http)
-                
-                # Build service with the custom HTTP client
-                service = build('calendar', 'v3', http=http, cache_discovery=False)
-                logger.info("Built Google Calendar service with httplib2 timeout")
-                
-            except Exception as http_error:
-                logger.warning(f"Failed to create service with httplib2: {http_error}")
-                # Fallback: Use default method
+                # Use the standard service build with proper timeout handling
                 service = build('calendar', 'v3', credentials=credentials, cache_discovery=False)
-                logger.info("Using fallback Google Calendar service build")
+                logger.info("Built Google Calendar service successfully")
+                
+            except Exception as build_error:
+                logger.error(f"Failed to build Google Calendar service: {build_error}")
+                return {
+                    'success': False,
+                    'error': f'Failed to initialize Google Calendar service: {str(build_error)}',
+                    'synced_count': 0
+                }
             
-            # Calculate date range - reduce to 7 days to minimize data transfer
-            start_date = datetime.now()
+            # Calculate date range - FIX: Use UTC time to match Google Calendar API expectations
+            start_date = datetime.now(timezone.utc)
             end_date = start_date + timedelta(days=min(days_ahead, 7))  # Limit to 7 days
             
-            logger.info(f"Fetching events from {start_date.date()} to {end_date.date()}")
+            logger.info(f"Fetching events from {start_date.date()} to {end_date.date()} (UTC)")
             
-            # Get events from Google Calendar with aggressive timeout and retry handling
+            # Get events from Google Calendar with enhanced timeout and retry handling
             events_result = None
-            max_retries = 3
-            retry_delay = 3  # Longer delay between retries
+            max_retries = 2  # Reduce retries to be faster
+            retry_delay = 1  # Shorter delay
             
-            for attempt in range(max_retries):
-                try:
-                    logger.info(f"Attempting to fetch calendar events (attempt {attempt + 1}/{max_retries})")
-                    
-                    # Direct API call without threading timeout (let httplib2 handle it)
-                    events_result = service.events().list(
-                        calendarId='primary',
-                        timeMin=start_date.isoformat() + 'Z',
-                        timeMax=end_date.isoformat() + 'Z',
-                        maxResults=5,  # Very small number to minimize timeout risk
-                        singleEvents=True,
-                        orderBy='startTime'
-                    ).execute()
-                    
-                    logger.info(f"Successfully fetched {len(events_result.get('items', []))} events")
-                    break  # Success, exit retry loop
-                    
-                except socket.timeout:
-                    logger.warning(f"Socket timeout on attempt {attempt + 1}")
-                    if attempt == max_retries - 1:  # Last attempt
-                        logger.error("Google Calendar API request timed out after all retry attempts")
-                        return {
-                            'success': False,
-                            'error': 'Connection timeout while fetching calendar events. Your internet connection may be slow or Google servers are busy. Please try again later.',
-                            'synced_count': 0
-                        }
-                    time.sleep(retry_delay)
-                    
-                except httplib2.ServerNotFoundError:
-                    logger.error("Server not found error - network connectivity issue")
-                    return {
-                        'success': False,
-                        'error': 'Network connection error. Please check your internet connection.',
-                        'synced_count': 0
-                    }
-                    
-                except HttpError as api_error:
-                    status_code = api_error.resp.status if hasattr(api_error, 'resp') else 0
-                    logger.warning(f"HTTP error {status_code} on attempt {attempt + 1}: {api_error}")
-                    
-                    if status_code in [429, 500, 502, 503, 504]:  # Rate limit or server errors
-                        if attempt == max_retries - 1:  # Last attempt
-                            logger.error(f"Google Calendar API HTTP error: {api_error}")
-                            return {
-                                'success': False,
-                                'error': f'Google Calendar service error (HTTP {status_code}). Please try again later.',
-                                'synced_count': 0
-                            }
-                        time.sleep(retry_delay * (2 ** attempt))  # Exponential backoff
-                    else:
-                        # Non-retryable error
-                        logger.error(f"Non-retryable Google Calendar API HTTP error: {api_error}")
-                        return {
-                            'success': False,
-                            'error': f'Google Calendar API error: {str(api_error)}',
-                            'synced_count': 0
-                        }
+            # Set global socket timeout for this operation
+            original_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(10)  # 10 second socket timeout - much shorter
+            
+            try:
+                for attempt in range(max_retries):
+                    try:
+                        logger.info(f"Attempting to fetch calendar events (attempt {attempt + 1}/{max_retries})")
                         
-                except Exception as api_error:
-                    error_str = str(api_error).lower()
-                    logger.error(f"General Google Calendar API error: {api_error}")
-                    
-                    if any(keyword in error_str for keyword in ['timeout', 'timed out', 'connection']):
-                        logger.warning(f"Timeout-related error detected in attempt {attempt + 1}")
+                        # Simple direct API call with reduced data request
+                        events_result = service.events().list(
+                            calendarId='primary',
+                            timeMin=start_date.isoformat(),
+                            timeMax=end_date.isoformat(),
+                            maxResults=2,  # Only get 2 events to minimize data transfer
+                            singleEvents=True,
+                            orderBy='startTime',
+                            fields='items(id,summary,start,end,description)'  # Request only essential fields
+                        ).execute()
+                        
+                        logger.info(f"Successfully fetched {len(events_result.get('items', []))} events")
+                        break  # Success, exit retry loop
+                        
+                    except socket.timeout:
+                        logger.warning(f"Socket timeout on attempt {attempt + 1}")
                         if attempt == max_retries - 1:  # Last attempt
+                            logger.error("Google Calendar API request timed out after all retry attempts")
                             return {
                                 'success': False,
-                                'error': 'Connection timeout while fetching calendar events. Please check your internet connection and try again.',
+                                'error': 'Connection timeout while fetching calendar events. Your internet connection may be slow or Google servers are busy. Please try again later.',
                                 'synced_count': 0
                             }
                         time.sleep(retry_delay)
-                    else:
+                        retry_delay *= 2  # Exponential backoff
+                    
+                    except httplib2.ServerNotFoundError:
+                        logger.error("Server not found error - network connectivity issue")
                         return {
                             'success': False,
-                            'error': f'Failed to fetch calendar events: {str(api_error)}',
+                            'error': 'Network connection error. Please check your internet connection.',
                             'synced_count': 0
                         }
+                        
+                    except HttpError as api_error:
+                        status_code = api_error.resp.status if hasattr(api_error, 'resp') else 0
+                        error_content = api_error.content.decode('utf-8') if hasattr(api_error, 'content') else str(api_error)
+                        
+                        logger.warning(f"HTTP error {status_code} on attempt {attempt + 1}: {error_content}")
+                        
+                        # Handle specific error codes
+                        if status_code == 401:
+                            logger.error("Unauthorized - credentials may be invalid or expired")
+                            return {
+                                'success': False,
+                                'error': 'Google Calendar authorization expired. Please re-authorize the application.',
+                                'synced_count': 0
+                            }
+                        elif status_code == 403:
+                            logger.error("Forbidden - insufficient permissions or quota exceeded")
+                            return {
+                                'success': False,
+                                'error': 'Google Calendar access forbidden. Check API permissions and quota.',
+                                'synced_count': 0
+                            }
+                        elif status_code in [429, 500, 502, 503, 504]:  # Rate limit or server errors
+                            if attempt == max_retries - 1:  # Last attempt
+                                logger.error(f"Google Calendar API HTTP error: {api_error}")
+                                return {
+                                    'success': False,
+                                    'error': f'Google Calendar service error (HTTP {status_code}). Please try again later.',
+                                    'synced_count': 0
+                                }
+                            # Exponential backoff for retryable errors
+                            backoff_delay = retry_delay * (2 ** attempt)
+                            logger.info(f"Retrying in {backoff_delay} seconds...")
+                            time.sleep(backoff_delay)
+                        else:
+                            # Non-retryable error
+                            logger.error(f"Non-retryable Google Calendar API HTTP error: {api_error}")
+                            return {
+                                'success': False,
+                                'error': f'Google Calendar API error: {str(api_error)}',
+                                'synced_count': 0
+                            }
+                            
+                    except Exception as api_error:
+                        error_str = str(api_error).lower()
+                        error_type = type(api_error).__name__
+                        
+                        logger.error(f"General Google Calendar API error ({error_type}): {api_error}")
+                        
+                        # Check for specific error patterns
+                        if any(keyword in error_str for keyword in ['timeout', 'timed out', 'connection']):
+                            logger.warning(f"Timeout-related error detected in attempt {attempt + 1}: {error_type}")
+                            if attempt == max_retries - 1:  # Last attempt
+                                return {
+                                    'success': False,
+                                    'error': 'Connection timeout while fetching calendar events. Please check your internet connection and try again.',
+                                    'synced_count': 0
+                                }
+                            time.sleep(retry_delay)
+                        elif 'credentials' in error_str or 'auth' in error_str:
+                            logger.error(f"Authentication-related error: {api_error}")
+                            return {
+                                'success': False,
+                                'error': 'Google Calendar authentication error. Please re-authorize the application.',
+                                'synced_count': 0
+                            }
+                        else:
+                            return {
+                                'success': False,
+                                'error': f'Failed to fetch calendar events: {str(api_error)}',
+                                'synced_count': 0
+                            }
+            
+            finally:
+                # Restore original socket timeout
+                socket.setdefaulttimeout(original_timeout)
             
             # Process the events and sync to database
             events = events_result.get('items', [])

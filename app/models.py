@@ -128,11 +128,13 @@ class User(UserMixin, db.Model):
     calendar_events = db.relationship('CalendarEvent', backref='user', lazy='dynamic')
     preferences = db.relationship('UserPreferences', backref='user', uselist=False)
     ai_recommendations = db.relationship('AIRecommendation', backref='user', lazy='dynamic')
+    personalized_advice = db.relationship('PersonalizedHealthAdvice', backref='user', uselist=False)
     """
     Additional relationships for calendar integration and AI features:
     - calendar_events: User's calendar events for AI optimization
     - preferences: User's app and AI behavior settings (one-to-one relationship)
     - ai_recommendations: AI-generated suggestions for the user
+    - personalized_advice: User's current personalized health advice (one-to-one relationship)
     """
     
     # USER METHODS - Functions that belong to the User model
@@ -495,3 +497,76 @@ class AIRecommendation(db.Model):
     
     def __repr__(self):
         return f'<AIRecommendation {self.title} for User {self.user_id}>'
+
+# PERSONALIZED HEALTH ADVICE MODEL - Store persistent health advice
+class PersonalizedHealthAdvice(db.Model):
+    """
+    Store AI-generated personalized health advice that persists across sessions
+    Each user has one current advice that stays until manually refreshed
+    """
+    
+    # PRIMARY KEY AND FOREIGN KEY
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, unique=True)
+    
+    # ADVICE CONTENT (stored as JSON)
+    insights = db.Column(db.Text)  # JSON array of insights
+    recommendations = db.Column(db.Text)  # JSON array of recommendations
+    quick_wins = db.Column(db.Text)  # JSON array of quick wins
+    concerns = db.Column(db.Text)  # JSON array of concerns
+    motivation = db.Column(db.Text)  # Motivation message
+    
+    # METADATA
+    source = db.Column(db.String(50), default='gemini_ai')  # Source of advice (gemini_ai, rule_based, etc.)
+    health_score_at_generation = db.Column(db.Float)  # Health score when advice was generated
+    
+    # TIMESTAMPS
+    generated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        """Convert advice to dictionary format for frontend"""
+        import json
+        
+        try:
+            return {
+                'insights': json.loads(self.insights) if self.insights else [],
+                'recommendations': json.loads(self.recommendations) if self.recommendations else [],
+                'quick_wins': json.loads(self.quick_wins) if self.quick_wins else [],
+                'concerns': json.loads(self.concerns) if self.concerns else [],
+                'motivation': self.motivation or '',
+                'source': self.source,
+                'generated_at': self.generated_at.isoformat() if self.generated_at else None,
+                'health_score': self.health_score_at_generation
+            }
+        except json.JSONDecodeError:
+            # Return empty structure if JSON is corrupted
+            return {
+                'insights': [],
+                'recommendations': [],
+                'quick_wins': [],
+                'concerns': [],
+                'motivation': '',
+                'source': self.source,
+                'generated_at': self.generated_at.isoformat() if self.generated_at else None,
+                'health_score': self.health_score_at_generation
+            }
+    
+    @staticmethod
+    def from_dict(user_id, advice_dict, health_score=None):
+        """Create advice from dictionary format"""
+        import json
+        
+        return PersonalizedHealthAdvice(
+            user_id=user_id,
+            insights=json.dumps(advice_dict.get('insights', [])),
+            recommendations=json.dumps(advice_dict.get('recommendations', [])),
+            quick_wins=json.dumps(advice_dict.get('quick_wins', [])),
+            concerns=json.dumps(advice_dict.get('concerns', [])),
+            motivation=advice_dict.get('motivation', ''),
+            source=advice_dict.get('source', 'gemini_ai'),
+            health_score_at_generation=health_score
+        )
+    
+    def __repr__(self):
+        return f'<PersonalizedHealthAdvice for User {self.user_id}>'

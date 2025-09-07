@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-edit me-2"></i>Edit Health Data Entry
+                    </h4>
+                    <small class="text-muted">Date: {{ health_data.date_logged.strftime('%B %d, %Y') }}</small>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('main.edit_health_data', data_id=health_data.id) }}">
+                        {{ form.hidden_tag() }}
+                        
+                        <!-- Date Section -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.date_logged.label(class="form-label") }}
+                                    {{ form.date_logged(class="form-control") }}
+                                    {% if form.date_logged.errors %}
+                                        <div class="text-danger small">
+                                            {% for error in form.date_logged.errors %}
+                                                <div>{{ error }}</div>
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.data_source.label(class="form-label") }}
+                                    {{ form.data_source(class="form-select") }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sleep Section -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-bed text-info me-2"></i>Sleep & Rest
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.sleep_duration_hours.label(class="form-label") }}
+                                        {{ form.sleep_duration_hours(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.sleep_quality_score.label(class="form-label") }}
+                                        {{ form.sleep_quality_score(class="form-control") }}
+                                        <small class="text-muted">1-10 scale</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.deep_sleep_hours.label(class="form-label") }}
+                                        {{ form.deep_sleep_hours(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.rem_sleep_hours.label(class="form-label") }}
+                                        {{ form.rem_sleep_hours(class="form-control") }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Activity Section -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-dumbbell text-success me-2"></i>Physical Activity
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.steps.label(class="form-label") }}
+                                        {{ form.steps(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.active_minutes.label(class="form-label") }}
+                                        {{ form.active_minutes(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.calories_burned.label(class="form-label") }}
+                                        {{ form.calories_burned(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.distance_km.label(class="form-label") }}
+                                        {{ form.distance_km(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.exercise_type.label(class="form-label") }}
+                                        {{ form.exercise_type(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.exercise_duration_minutes.label(class="form-label") }}
+                                        {{ form.exercise_duration_minutes(class="form-control") }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Vital Signs Section -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-heartbeat text-danger me-2"></i>Vital Signs
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.heart_rate_avg.label(class="form-label") }}
+                                        {{ form.heart_rate_avg(class="form-control") }}
+                                        <small class="text-muted">BPM</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.heart_rate_resting.label(class="form-label") }}
+                                        {{ form.heart_rate_resting(class="form-control") }}
+                                        <small class="text-muted">BPM</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.systolic_bp.label(class="form-label") }}
+                                        {{ form.systolic_bp(class="form-control") }}
+                                        <small class="text-muted">mmHg</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.diastolic_bp.label(class="form-label") }}
+                                        {{ form.diastolic_bp(class="form-control") }}
+                                        <small class="text-muted">mmHg</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.oxygen_saturation.label(class="form-label") }}
+                                        {{ form.oxygen_saturation(class="form-control") }}
+                                        <small class="text-muted">%</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.body_temperature.label(class="form-label") }}
+                                        {{ form.body_temperature(class="form-control") }}
+                                        <small class="text-muted">°C</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Nutrition & Hydration Section -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-utensils text-warning me-2"></i>Nutrition & Hydration
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.water_intake_liters.label(class="form-label") }}
+                                        {{ form.water_intake_liters(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.calories_consumed.label(class="form-label") }}
+                                        {{ form.calories_consumed(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.protein_grams.label(class="form-label") }}
+                                        {{ form.protein_grams(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.carbs_grams.label(class="form-label") }}
+                                        {{ form.carbs_grams(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.fat_grams.label(class="form-label") }}
+                                        {{ form.fat_grams(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.fiber_grams.label(class="form-label") }}
+                                        {{ form.fiber_grams(class="form-control") }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Body Composition Section -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-weight text-primary me-2"></i>Body Composition
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.weight_kg.label(class="form-label") }}
+                                        {{ form.weight_kg(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.body_fat_percentage.label(class="form-label") }}
+                                        {{ form.body_fat_percentage(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.muscle_mass_kg.label(class="form-label") }}
+                                        {{ form.muscle_mass_kg(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.bmi.label(class="form-label") }}
+                                        {{ form.bmi(class="form-control") }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mental Health & Lifestyle Section -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-brain text-purple me-2"></i>Mental Health & Lifestyle
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.mood_score.label(class="form-label") }}
+                                        {{ form.mood_score(class="form-control") }}
+                                        <small class="text-muted">1-10 scale</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.stress_level.label(class="form-label") }}
+                                        {{ form.stress_level(class="form-control") }}
+                                        <small class="text-muted">1-10 scale</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.energy_level.label(class="form-label") }}
+                                        {{ form.energy_level(class="form-control") }}
+                                        <small class="text-muted">1-10 scale</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.meditation_minutes.label(class="form-label") }}
+                                        {{ form.meditation_minutes(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.screen_time_hours.label(class="form-label") }}
+                                        {{ form.screen_time_hours(class="form-control") }}
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        {{ form.social_interactions.label(class="form-label") }}
+                                        {{ form.social_interactions(class="form-control") }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Additional Notes -->
+                        <div class="mb-4">
+                            {{ form.notes.label(class="form-label") }}
+                            {{ form.notes(class="form-control", rows="3") }}
+                            <small class="text-muted">Optional notes about this health data entry</small>
+                        </div>
+
+                        <!-- Form Buttons -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('main.manage_health_data') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Back to List
+                            </a>
+                            <div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-2"></i>Update Entry
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
