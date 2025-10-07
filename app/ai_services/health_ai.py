@@ -26,7 +26,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 import spacy
-import google.generativeai as genai
+from google import genai
 from google.genai import types
 from flask import current_app
 

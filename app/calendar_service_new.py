@@ -32,7 +32,7 @@ from googleapiclient.errors import HttpError
 import httplib2
 
 # AI and ML
-import google.generativeai as genai
+from google import genai
 from google.genai import types
 import spacy
 

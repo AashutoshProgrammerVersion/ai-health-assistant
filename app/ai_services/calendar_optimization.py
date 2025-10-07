@@ -15,7 +15,7 @@ import json
 import logging
 from datetime import datetime, timedelta, time
 from typing import Dict, List, Optional, Tuple
-import google.generativeai as genai
+from google import genai
 from google.genai import types
 import spacy
 from google.auth.transport.requests import Request
