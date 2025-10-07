@@ -36,6 +36,15 @@ from flask_login import LoginManager
 This tracks which users are logged in and protects routes that require authentication
 """
 
+# DATABASE MIGRATION EXTENSION IMPORT - Database schema changes
+from flask_migrate import Migrate
+"""
+'from flask_migrate import Migrate' - Import database migration manager
+'flask_migrate' - Flask extension for handling database schema changes
+'Migrate' - Class that manages database migrations and upgrades
+This handles database schema evolution and version control
+"""
+
 # CONFIGURATION IMPORT - Application settings
 from config import Config
 """
@@ -61,6 +70,14 @@ login = LoginManager()
 'login' - Variable name for the authentication manager
 'LoginManager()' - Create an instance of the LoginManager class
 This object handles user authentication, login sessions, and access control
+"""
+
+migrate = Migrate()
+"""
+'migrate = Migrate()' - Create a global Migrate instance
+'migrate' - Variable name for the database migration manager
+'Migrate()' - Create an instance of the Migrate class
+This object handles database schema changes and version control
 """
 
 # LOGIN MANAGER CONFIGURATION - Set up authentication behavior
@@ -135,6 +152,15 @@ def create_app(config_class=Config):
     'login' - Our global LoginManager instance created earlier
     'init_app()' - Method that connects authentication to a specific Flask app
     This enables user session management and login functionality
+    """
+    
+    migrate.init_app(app, db)
+    """
+    'migrate.init_app(app, db)' - Initialize Migrate with our Flask app and database
+    'migrate' - Our global Migrate instance created earlier
+    'init_app()' - Method that connects migration functionality to Flask app
+    'app, db' - Parameters: Flask app and SQLAlchemy database instance
+    This enables database migration commands and schema version control
     """
     
     # CREATE UPLOAD DIRECTORY - Ensure uploads folder exists for health data files

@@ -1,0 +1,54 @@
+services:
+  # Main web service
+  - type: web
+    name: ai-health-assistant
+    env: python
+    region: oregon  # Choose closest to your users: oregon, frankfurt, singapore, ohio
+    plan: free
+    branch: main
+    buildCommand: "chmod +x build.sh && ./build.sh"
+    startCommand: "gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 run:app"
+    
+    envVars:
+      # Python version
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      
+      # Flask environment
+      - key: FLASK_ENV
+        value: production
+      
+      # Secret key for Flask sessions (auto-generated secure random value)
+      - key: SECRET_KEY
+        generateValue: true
+      
+      # Database connection (linked to PostgreSQL service below)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: health-assistant-db
+          property: connectionString
+      
+      # AI Model Configuration
+      - key: AI_MODEL
+        value: gemini-1.5-flash
+      
+      # You'll need to add these manually in Render dashboard:
+      # - GEMINI_API_KEY (your Google Gemini API key)
+      # - GOOGLE_CALENDAR_CLIENT_ID (your Google OAuth client ID)
+      # - GOOGLE_CALENDAR_CLIENT_SECRET (your Google OAuth client secret)
+    
+    # Persistent disk for file uploads
+    disk:
+      name: health-data-uploads
+      mountPath: /opt/render/project/src/uploads
+      sizeGB: 1  # 1GB free persistent storage
+    
+    # Health check endpoint
+    healthCheckPath: /
+
+# PostgreSQL Database
+databases:
+  - name: health-assistant-db
+    databaseName: health_db
+    user: health_user
+    plan: free  # Free PostgreSQL instance

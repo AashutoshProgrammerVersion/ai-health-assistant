@@ -40,6 +40,12 @@
 
                     <!-- Upload Form -->
                     <form id="healthDataForm" enctype="multipart/form-data">
+                        <!-- Submit Button (moved to top) -->
+                        <div class="d-grid mb-4">
+                            <button type="submit" class="btn btn-primary btn-lg" id="processBtn" disabled>
+                                <i class="fas fa-brain me-2"></i>Process with AI
+                            </button>
+                        </div>
 
                         <div class="mb-4">
                             <label for="healthFiles" class="form-label">Select Health Data Files</label>
@@ -67,7 +73,7 @@
                         <!-- Selected Files Display -->
                         <div id="selectedFiles" class="mb-4" style="display: none;">
                             <h6>Selected Files:</h6>
-                            <div id="filesList" class="list-group" style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.375rem;">
+                            <div id="filesList" class="list-group">
                                 <!-- Files will be added here dynamically -->
                             </div>
                         </div>
@@ -76,27 +82,20 @@
                         <div class="row mb-4">
                             <div class="col-md-6">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="generateCalendarSuggestions" checked disabled>
-                                    <label class="form-check-label text-muted" for="generateCalendarSuggestions">
-                                        Generate calendar optimization suggestions (Not programmed)
+                                    <input class="form-check-input" type="checkbox" id="generateCalendarSuggestions" checked>
+                                    <label class="form-check-label" for="generateCalendarSuggestions">
+                                        Generate calendar optimization suggestions
                                     </label>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="createHealthReminders" checked disabled>
-                                    <label class="form-check-label text-muted" for="createHealthReminders">
-                                        Create health-based reminders (Not programmed)
+                                    <input class="form-check-input" type="checkbox" id="createHealthReminders" checked>
+                                    <label class="form-check-label" for="createHealthReminders">
+                                        Create health-based reminders
                                     </label>
                                 </div>
                             </div>
-                        </div>
-
-                        <!-- Submit Button (moved to bottom) -->
-                        <div class="d-grid mb-4">
-                            <button type="submit" class="btn btn-primary btn-lg" id="processBtn" disabled>
-                                <i class="fas fa-brain me-2"></i>Process with AI
-                            </button>
                         </div>
                     </form>
 
@@ -325,7 +324,6 @@ function updateProgressDisplay(progressData) {
     const currentTaskElement = document.getElementById('currentTask');
     
     if (!progressBar) {
-        console.error('❌ Progress bar element not found!');
         return;
     }
     
@@ -378,49 +376,39 @@ function updateProgressDisplay(progressData) {
             progressBar.classList.add('bg-primary');
         }
     }
-    
-    console.log('✅ Progress display updated successfully');
 }
 
 function startProgressStream() {
-    console.log('Starting progress tracking...');
-    
-    // Start with polling immediately for more reliable updates
-    startPolling();
-    
-    // Also try SSE as backup
     if (eventSource) {
         eventSource.close();
     }
     
+    // Try SSE first, with fallback to polling
     try {
         eventSource = new EventSource('/health_data/progress_stream');
         
         eventSource.onopen = function(event) {
-            console.log('SSE connection opened');
         };
         
         eventSource.onmessage = function(event) {
             try {
                 const progressData = JSON.parse(event.data);
-                console.log('SSE progress update:', progressData);
                 
                 if (progressData.type === 'connected') {
-                    console.log('SSE stream connected');
                     return;
                 }
                 
                 if (progressData.type === 'complete') {
-                    console.log('SSE: Processing complete');
                     eventSource.close();
                     eventSource = null;
                     return;
                 }
                 
                 if (progressData.type === 'error') {
-                    console.error('SSE stream error:', progressData.message);
                     eventSource.close();
                     eventSource = null;
+                    // Fallback to polling
+                    startPolling();
                     return;
                 }
                 
@@ -428,30 +416,28 @@ function startProgressStream() {
                 updateProgressDisplay(progressData);
                 
             } catch (error) {
-                console.error('Error parsing SSE progress data:', error);
             }
         };
         
         eventSource.onerror = function(event) {
-            console.log('SSE error - polling will continue');
             if (eventSource) {
                 eventSource.close();
                 eventSource = null;
             }
+            // Fallback to polling
+            startPolling();
         };
         
     } catch (error) {
-        console.log('SSE not available, using polling only:', error);
+        startPolling();
     }
 }
 
 function startPolling() {
-    console.log('Starting progress polling...');
     pollProgress();
 }
 
 function pollProgress() {
-    console.log('🔍 Polling progress...');
     fetch('/health_data/progress')
         .then(response => {
             return response.json();
@@ -461,11 +447,10 @@ function pollProgress() {
             
             // Continue polling if not complete
             if (progressData.step < progressData.total_steps) {
-                setTimeout(pollProgress, 500); // Poll every 0.5 seconds for faster updates
+                setTimeout(pollProgress, 1000); // Poll every 1 second
             }
         })
         .catch(error => {
-            console.error('❌ Error polling progress:', error);
             // Continue polling on error
             setTimeout(pollProgress, 2000); // Poll every 2 seconds on error
         });
@@ -483,7 +468,7 @@ async function processHealthFiles() {
         return;
     }
     
-    console.log('Starting file processing...');
+
     
     // Show processing status
     document.getElementById('processingStatus').style.display = 'block';
@@ -508,14 +493,14 @@ async function processHealthFiles() {
     });
     
     try {
-        console.log('Sending files to server...');
+
         const response = await fetch('/health_data/process', {
             method: 'POST',
             body: formData
         });
         
         const result = await response.json();
-        console.log('Server response:', result);
+
         
         // Hide processing status
         document.getElementById('processingStatus').style.display = 'none';

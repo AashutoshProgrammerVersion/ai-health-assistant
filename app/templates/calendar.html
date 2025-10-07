@@ -22,9 +22,12 @@
                     <i class="fab fa-google me-1"></i>Connect Google Calendar
                 </a>
                 {% endif %}
-                {% if preferences and preferences.ai_optimization_enabled %}
+                {% if preferences and (preferences.ai_optimization_enabled or preferences.smart_reminders_enabled) %}
                 <button type="button" class="btn btn-info ms-2" onclick="optimizeSchedule()">
                     <i class="fas fa-robot me-1"></i>AI Optimize
+                </button>
+                <button type="button" class="btn btn-outline-warning ms-1" onclick="resetTodayOptimization()" title="Reset today's AI optimization (for testing)">
+                    <i class="fas fa-undo me-1"></i>Reset Today
                 </button>
                 {% endif %}
             </div>
@@ -34,11 +37,15 @@
         {% if preferences %}
         <div class="alert alert-info" role="alert">
             <i class="fas fa-info-circle me-2"></i>
-            <strong>AI Optimization:</strong> 
-            {% if preferences.ai_optimization_enabled %}
-                <span class="text-success">Enabled</span> - AI can suggest schedule improvements
+            <strong>AI Features:</strong> 
+            {% if preferences.ai_optimization_enabled and preferences.smart_reminders_enabled %}
+                <span class="text-success">Schedule Optimization & Smart Reminders Enabled</span> - AI can move events and add intelligent reminders
+            {% elif preferences.ai_optimization_enabled %}
+                <span class="text-success">Schedule Optimization Enabled</span> - AI can suggest schedule improvements (reminders disabled)
+            {% elif preferences.smart_reminders_enabled %}
+                <span class="text-success">Smart Reminders Enabled</span> - AI can generate intelligent reminders (schedule optimization disabled)
             {% else %}
-                <span class="text-muted">Disabled</span> - Enable in <a href="{{ url_for('main.user_preferences') }}">Settings</a>
+                <span class="text-muted">AI Features Disabled</span> - Enable in <a href="{{ url_for('main.user_preferences') }}">Settings</a>
             {% endif %}
         </div>
         {% endif %}
@@ -232,7 +239,16 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="optimizationModalLabel">
-                    <i class="fas fa-robot me-2"></i>AI Schedule Optimization
+                    <i class="fas fa-robot me-2"></i>
+                    {% if preferences and preferences.ai_optimization_enabled and preferences.smart_reminders_enabled %}
+                    AI Schedule Optimization & Smart Reminders
+                    {% elif preferences and preferences.ai_optimization_enabled %}
+                    AI Schedule Optimization
+                    {% elif preferences and preferences.smart_reminders_enabled %}
+                    AI Smart Reminders
+                    {% else %}
+                    AI Features
+                    {% endif %}
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -486,7 +502,19 @@
 // Calendar state
 let currentDate = new Date();
 let currentView = 'month';
-let events = {{ events_data | tojson if events_data else '[]' }};
+let events = [];
+
+// Initialize events data from template
+try {
+    events = {% if events_data %}{{ events_data | tojson | safe }}{% else %}[]{% endif %};
+    // Ensure events is an array
+    if (!Array.isArray(events)) {
+        events = [];
+    }
+} catch (e) {
+    console.error('Error loading events data:', e);
+    events = [];
+}
 
 // Initialize calendar on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -864,6 +892,32 @@ function syncGoogleCalendar() {
     });
 }
 
+function resetTodayOptimization() {
+    if (!confirm('Are you sure you want to reset today\'s AI optimization? This will remove all AI-generated reminders for today.')) {
+        return;
+    }
+    
+    fetch('{{ url_for("main.reset_today_optimization") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload(); // Refresh the page to show updated calendar
+        } else {
+            alert('Reset failed: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Reset failed: ' + error.message);
+    });
+}
+
 function optimizeSchedule() {
     // Show modal
     const modal = new bootstrap.Modal(document.getElementById('optimizationModal'));
@@ -908,14 +962,35 @@ function displayOptimizationResults(data) {
             <div class="list-group mb-3">
         `;
         data.schedule_changes.forEach(change => {
+            // Format the optimized time properly using the correct field names
+            let suggestedTime = 'Invalid Date';
+            try {
+                // Use the optimized_start field which contains the time in HH:MM format
+                if (change.optimized_start) {
+                    suggestedTime = change.optimized_start;
+                } else if (change.optimized_start_full) {
+                    // If we have the full ISO date, parse it and format it
+                    const optimalDate = new Date(change.optimized_start_full);
+                    if (!isNaN(optimalDate.getTime())) {
+                        suggestedTime = optimalDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    }
+                } else {
+                    suggestedTime = 'Time not available';
+                }
+            } catch (e) {
+                console.warn('Date parsing error:', e, change);
+                suggestedTime = 'Error parsing time';
+            }
+            
             html += `
                 <div class="list-group-item">
                     <div class="d-flex w-100 justify-content-between">
                         <h6 class="mb-1">Event Reschedule</h6>
                         <small class="text-muted">AI Suggestion</small>
                     </div>
+                    <p class="mb-1">${change.event_title || 'Event'}</p>
                     <p class="mb-1">${change.reason}</p>
-                    <small>Suggested time: ${new Date(change.suggested_time).toLocaleString()}</small>
+                    <small>Original time: ${change.original_start || 'Unknown'} → Suggested time: ${suggestedTime}</small>
                 </div>
             `;
         });
@@ -930,14 +1005,33 @@ function displayOptimizationResults(data) {
         `;
         data.new_reminders.forEach(reminder => {
             const iconClass = reminder.type === 'water' ? 'fa-tint' : 
-                            reminder.type === 'exercise' ? 'fa-dumbbell' : 'fa-bed';
+                            reminder.type === 'exercise' ? 'fa-dumbbell' : 
+                            reminder.type === 'sleep' ? 'fa-bed' :
+                            reminder.type === 'meal' ? 'fa-utensils' :
+                            reminder.type === 'medication' ? 'fa-pills' : 'fa-bell';
+            
+            // Format the reminder time properly
+            let reminderTime = 'Invalid Time';
+            try {
+                // Try multiple possible field names for time
+                const timeValue = reminder.time || reminder.start_time || reminder.reminder_time;
+                if (timeValue) {
+                    const reminderDate = new Date(timeValue);
+                    if (!isNaN(reminderDate.getTime())) {
+                        reminderTime = reminderDate.toLocaleTimeString();
+                    }
+                }
+            } catch (e) {
+                console.warn('Reminder time parsing error:', e, reminder);
+            }
+            
             html += `
                 <div class="list-group-item">
                     <div class="d-flex w-100 justify-content-between">
                         <h6 class="mb-1">
                             <i class="fas ${iconClass} me-2"></i>${reminder.type.charAt(0).toUpperCase() + reminder.type.slice(1)} Reminder
                         </h6>
-                        <small>${new Date(reminder.time).toLocaleTimeString()}</small>
+                        <small>${reminderTime}</small>
                     </div>
                     <p class="mb-1">${reminder.message}</p>
                 </div>

@@ -8,6 +8,7 @@ It sets up the Flask app and starts the web server.
 
 # IMPORT STATEMENTS - Bringing in code from other files
 from app import create_app, db
+import logging
 """
 'from app import' - This tells Python to look in the 'app' folder (which contains __init__.py)
 'create_app' - A function that creates and configures our Flask application
@@ -22,6 +23,16 @@ from app.models import User, HealthData
 These represent the structure of our database tables
 We import them here so Flask knows about all database tables when it starts
 """
+
+# LOGGING CONFIGURATION - Suppress progress polling spam
+class ProgressFilter(logging.Filter):
+    """Custom filter to suppress GET /health_data/progress messages"""
+    def filter(self, record):
+        # Check if this is a werkzeug log message about health_data/progress
+        if hasattr(record, 'getMessage'):
+            message = record.getMessage()
+            return '/health_data/progress' not in message
+        return True
 
 # APPLICATION CREATION - Setting up the Flask web application
 app = create_app()
@@ -56,6 +67,11 @@ if __name__ == '__main__':
         'create_all()' - Method that creates tables based on our model definitions
         This creates the 'users' and 'health_data' tables if they don't exist
         """
+    
+    # Apply filter to suppress progress polling spam
+    werkzeug_logger = logging.getLogger('werkzeug')
+    progress_filter = ProgressFilter()
+    werkzeug_logger.addFilter(progress_filter)
     
     app.run(debug=True)
     """

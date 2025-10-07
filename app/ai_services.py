@@ -22,6 +22,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 import spacy
 import google.generativeai as genai
+from google.genai import types
 from flask import current_app
 
 # Configure logging
@@ -47,8 +48,20 @@ class HealthAIService:
             api_key = current_app.config.get('GEMINI_API_KEY')
             if api_key:
                 genai.configure(api_key=api_key)
-                self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
-                logger.info("Gemini AI configured successfully")
+                
+                # Use dictionary format for generation config (compatible with current version)
+                generation_config = {
+                    "response_mime_type": "application/json",
+                    "temperature": 0.7,
+                    "top_p": 0.8,
+                    "top_k": 40
+                }
+                
+                self.gemini_model = genai.GenerativeModel(
+                    'gemini-2.5-flash',
+                    generation_config=generation_config
+                )
+                logger.info("Gemini AI configured successfully with JSON response")
             else:
                 logger.warning("Gemini API key not found")
                 self.gemini_model = None
@@ -335,5 +348,5 @@ class HealthAIService:
         
         return '\n'.join(advice_parts)
 
-# Singleton instance
-health_ai_service = HealthAIService()
+# Remove module-level instantiation to avoid app context errors
+# Use get_health_ai_service() from ai_services/__init__.py instead

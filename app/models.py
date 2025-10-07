@@ -287,16 +287,36 @@ class HealthData(db.Model):
     
     # HYDRATION AND NUTRITION - Lifestyle tracking
     water_intake_liters = db.Column(db.Float)        # Water intake in liters (0-10)
+    calories_consumed = db.Column(db.Integer)        # Daily calorie intake (0-10000)
+    protein_grams = db.Column(db.Float)              # Daily protein intake in grams (0-500)
+    carbs_grams = db.Column(db.Float)                # Daily carbohydrate intake in grams (0-1000)
+    fat_grams = db.Column(db.Float)                  # Daily fat intake in grams (0-300)
+    fiber_grams = db.Column(db.Float)                # Daily fiber intake in grams (0-100)
+    
+    # BLOOD PRESSURE METRICS - Cardiovascular health
+    systolic_bp = db.Column(db.Integer)              # Systolic blood pressure (60-250)
+    diastolic_bp = db.Column(db.Integer)             # Diastolic blood pressure (40-150)
+    
+    # ADDITIONAL BODY METRICS
+    bmi = db.Column(db.Float)                        # Body Mass Index (10-50)
     
     # SUBJECTIVE METRICS - User-reported wellness indicators
     mood_score = db.Column(db.Integer)               # Mood rating (1-10)
     energy_level = db.Column(db.Integer)             # Energy level (1-10)
+    
+    # LIFESTYLE METRICS - Daily wellness tracking
+    meditation_minutes = db.Column(db.Integer)       # Daily meditation time (0-300)
+    screen_time_hours = db.Column(db.Float)          # Daily screen time (0-24)
+    social_interactions = db.Column(db.Integer)      # Number of social interactions (0-50)
     
     # EXERCISE SESSION DETAILS - Workout-specific metrics
     workout_type = db.Column(db.String(50))          # Type of exercise (cardio, strength, etc.)
     workout_duration_minutes = db.Column(db.Integer)  # Exercise session length (0-480)
     workout_intensity = db.Column(db.String(20))     # Intensity level (low, moderate, high)
     workout_calories = db.Column(db.Integer)         # Calories burned during workout (0-2000)
+
+    # ADDITIONAL NOTES - User-provided context
+    notes = db.Column(db.Text)                       # Optional notes about health data entry
 
     # FILE-BASED HEALTH DATA PROCESSING - Enhanced for multi-device support
     data_source = db.Column(db.String(100), default='manual')  # 'manual', 'file_upload', 'api'
@@ -449,6 +469,7 @@ class UserPreferences(db.Model):
     reminder_sleep = db.Column(db.Boolean, default=True)
     reminder_medication = db.Column(db.Boolean, default=False)
     reminder_meal = db.Column(db.Boolean, default=False)
+    reminder_mindfulness = db.Column(db.Boolean, default=True)  # Now properly added to database
     smart_reminders_enabled = db.Column(db.Boolean, default=True)  # Enable adaptive reminders
     
     # QUIET HOURS - When not to send reminders
@@ -570,3 +591,32 @@ class PersonalizedHealthAdvice(db.Model):
     
     def __repr__(self):
         return f'<PersonalizedHealthAdvice for User {self.user_id}>'
+
+# EVENT BACKUP MODEL - Store original event times before AI optimization
+class EventBackup(db.Model):
+    """
+    Store original event times before AI optimization to enable reset functionality
+    Tracks what was changed during optimization so it can be reverted
+    """
+    
+    # PRIMARY KEYS
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    event_id = db.Column(db.Integer, db.ForeignKey('calendar_event.id'), nullable=False)
+    
+    # ORIGINAL EVENT TIMES - Before AI optimization
+    original_start_time = db.Column(db.DateTime, nullable=False)
+    original_end_time = db.Column(db.DateTime, nullable=False)
+    
+    # BACKUP METADATA
+    optimization_date = db.Column(db.Date, nullable=False)  # Date when optimization occurred
+    backup_reason = db.Column(db.String(100), default='ai_optimization')  # Why backup was created
+    
+    # RECORD TIMESTAMPS
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # RELATIONSHIPS
+    calendar_event = db.relationship('CalendarEvent', backref='event_backups')
+    
+    def __repr__(self):
+        return f'<EventBackup for Event {self.event_id} on {self.optimization_date}>'

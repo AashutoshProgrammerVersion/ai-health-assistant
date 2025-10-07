@@ -51,9 +51,10 @@
                                 <div class="col-md-4 mb-3">
                                     {{ form.daily_water_goal.label(class="form-label") }}
                                     <div class="input-group">
-                                        {{ form.daily_water_goal(class="form-control") }}
-                                        <span class="input-group-text">L</span>
+                                        {{ form.daily_water_goal(class="form-control", id="dailyWaterGoal", onchange="updateWaterConversion()") }}
+                                        <span class="input-group-text">glasses</span>
                                     </div>
+                                    <small class="text-muted" id="waterConversion">Equivalent: {{ (form.daily_water_goal.data or 8) * 0.25 }} liters</small>
                                     {% if form.daily_water_goal.errors %}
                                         <div class="text-danger">
                                             {% for error in form.daily_water_goal.errors %}
@@ -123,16 +124,16 @@
                                 </div>
                             </div>
                             <div class="row">
-                                <div class="col-md-4">
-                                    <div class="form-check mb-2">
-                                        {{ form.reminder_medication(class="form-check-input") }}
-                                        {{ form.reminder_medication.label(class="form-check-label") }}
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <div class="form-check mb-2">
                                         {{ form.reminder_meal(class="form-check-input") }}
                                         {{ form.reminder_meal.label(class="form-check-label") }}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check mb-2">
+                                        {{ form.reminder_mindfulness(class="form-check-input") }}
+                                        {{ form.reminder_mindfulness.label(class="form-check-label") }}
                                     </div>
                                 </div>
                             </div>
@@ -332,9 +333,26 @@ function syncGoogleCalendar(button) {
     
     console.log('Sync button clicked'); // Debug log
     
-    // Show loading state
-    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Syncing...';
+    // Show initial loading state with timeout warning
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Syncing... (This may take up to 3 minutes)';
     button.disabled = true;
+    
+    // Show progress messages
+    let progressStep = 0;
+    const progressMessages = [
+        '<i class="fas fa-spinner fa-spin me-1"></i>Connecting to Google Calendar...',
+        '<i class="fas fa-spinner fa-spin me-1"></i>Authenticating... (Google APIs are slow in your region)',
+        '<i class="fas fa-spinner fa-spin me-1"></i>Fetching your calendar events... (Please wait)',
+        '<i class="fas fa-spinner fa-spin me-1"></i>Processing events... (Almost done)'
+    ];
+    
+    // Update progress message every 20 seconds
+    const progressInterval = setInterval(() => {
+        if (progressStep < progressMessages.length - 1) {
+            progressStep++;
+            button.innerHTML = progressMessages[progressStep];
+        }
+    }, 20000);
     
     // Get CSRF token
     const csrfToken = document.querySelector('meta[name=csrf-token]');
@@ -356,32 +374,46 @@ function syncGoogleCalendar(button) {
     })
     .then(data => {
         console.log('Response data:', data); // Debug log
+        
+        // Clear progress interval
+        clearInterval(progressInterval);
+        
         if (data.success) {
             // Show success message
-            button.innerHTML = '<i class="fas fa-check me-1"></i>Synced!';
+            button.innerHTML = '<i class="fas fa-check me-1"></i>Calendar Synced Successfully!';
             button.classList.remove('btn-outline-primary');
             button.classList.add('btn-success');
             
             // Reload page to show updated sync time
             setTimeout(() => {
                 location.reload();
-            }, 1500);
+            }, 2000);
         } else {
-            // Show error
-            button.innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i>Error: ${data.error || 'Unknown error'}`;
+            // Show error - truncate very long error messages
+            const errorMsg = data.error || 'Unknown error';
+            const shortError = errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg;
+            
+            button.innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i>Error: ${shortError}`;
             button.classList.remove('btn-outline-primary');
             button.classList.add('btn-danger');
+            
+            // Show full error in console for debugging
+            console.error('Full error:', errorMsg);
             
             setTimeout(() => {
                 button.innerHTML = originalText;
                 button.classList.remove('btn-danger');
                 button.classList.add('btn-outline-primary');
                 button.disabled = false;
-            }, 3000);
+            }, 5000);
         }
     })
     .catch(error => {
         console.error('Calendar sync error:', error); // Debug log
+        
+        // Clear progress interval
+        clearInterval(progressInterval);
+        
         button.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Network Error';
         button.classList.remove('btn-outline-primary');
         button.classList.add('btn-danger');
@@ -419,6 +451,23 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+});
+
+// Function to update water goal conversion from glasses to liters
+function updateWaterConversion() {
+    const waterGoalInput = document.getElementById('dailyWaterGoal');
+    const conversionDisplay = document.getElementById('waterConversion');
+    
+    if (waterGoalInput && conversionDisplay) {
+        const glasses = parseInt(waterGoalInput.value) || 0;
+        const liters = (glasses * 0.25).toFixed(1);
+        conversionDisplay.textContent = `Equivalent: ${liters} liters`;
+    }
+}
+
+// Initialize water conversion display on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateWaterConversion();
 });
 </script>
 {% endblock %}

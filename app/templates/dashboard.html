@@ -1,6 +1,71 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+    /* Health Visualization Styles */
+    .correlation-strength {
+        width: 100%;
+        height: 8px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .strength-bar {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+    
+    .correlation-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .correlation-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    }
+    
+    .summary-card {
+        transition: transform 0.2s ease;
+    }
+    
+    .summary-card:hover {
+        transform: scale(1.05);
+    }
+    
+    .zone-item {
+        transition: all 0.2s ease;
+    }
+    
+    .zone-item:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transform: translateX(5px);
+    }
+    
+    .hydration-goal-circle {
+        animation: fadeIn 1s ease;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.8); }
+        to { opacity: 1; transform: scale(1); }
+    }
+    
+    /* Responsive chart containers */
+    canvas {
+        max-width: 100%;
+        height: auto !important;
+    }
+    
+    /* Print-friendly styles */
+    @media print {
+        .card {
+            page-break-inside: avoid;
+        }
+    }
+</style>
+
 <div class="row">
     <div class="col-md-8">
         <!-- Header Section -->
@@ -14,7 +79,7 @@
                     <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Wearable Device Connected</span>
                 {% else %}
                     <a href="{{ url_for('main.user_preferences') }}" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-link me-1"></i>Connect Wearable Device
+                        <i class="fas fa-upload me-1"></i>Upload Health Data Files
                     </a>
                 {% endif %}
             </div>
@@ -47,21 +112,21 @@
                                     <label class="form-label small">Activity Level</label>
                                     <div class="progress" style="height: 10px;">
                                         <div class="progress-bar bg-success" role="progressbar" 
-                                             style="width: {{ activity_score or 50 }}%" 
-                                             aria-valuenow="{{ activity_score or 50 }}" 
+                                             style="width: {{ activity_score or 0 }}%" 
+                                             aria-valuenow="{{ activity_score or 0 }}" 
                                              aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
-                                    <small class="text-muted">{{ activity_score or 50 }}/100</small>
+                                    <small class="text-muted">{{ activity_score or 0 }}/100</small>
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label small">Sleep Quality</label>
                                     <div class="progress" style="height: 10px;">
                                         <div class="progress-bar bg-info" role="progressbar" 
-                                             style="width: {{ sleep_score or 50 }}%" 
-                                             aria-valuenow="{{ sleep_score or 50 }}" 
+                                             style="width: {{ sleep_score or 0 }}%" 
+                                             aria-valuenow="{{ sleep_score or 0 }}" 
                                              aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
-                                    <small class="text-muted">{{ sleep_score or 50 }}/100</small>
+                                    <small class="text-muted">{{ sleep_score or 0 }}/100</small>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -69,21 +134,21 @@
                                     <label class="form-label small">Nutrition</label>
                                     <div class="progress" style="height: 10px;">
                                         <div class="progress-bar bg-warning" role="progressbar" 
-                                             style="width: {{ nutrition_score or 50 }}%" 
-                                             aria-valuenow="{{ nutrition_score or 50 }}" 
+                                             style="width: {{ nutrition_score or 0 }}%" 
+                                             aria-valuenow="{{ nutrition_score or 0 }}" 
                                              aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
-                                    <small class="text-muted">{{ nutrition_score or 50 }}/100</small>
+                                    <small class="text-muted">{{ nutrition_score or 0 }}/100</small>
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label small">Hydration</label>
                                     <div class="progress" style="height: 10px;">
                                         <div class="progress-bar bg-primary" role="progressbar" 
-                                             style="width: {{ hydration_score or 50 }}%" 
-                                             aria-valuenow="{{ hydration_score or 50 }}" 
+                                             style="width: {{ hydration_score or 0 }}%" 
+                                             aria-valuenow="{{ hydration_score or 0 }}" 
                                              aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
-                                    <small class="text-muted">{{ hydration_score or 50 }}/100</small>
+                                    <small class="text-muted">{{ hydration_score or 0 }}/100</small>
                                 </div>
                             </div>
                         </div>
@@ -154,7 +219,7 @@
                                     <th>Date</th>
                                     <th>Sleep (hrs)</th>
                                     <th>Water (glasses)</th>
-                                    <th>Activity (1-10)</th>
+                                    <th>Energy (1-10)</th>
                                     <th>Steps</th>
                                     <th>Heart Rate</th>
                                     <th>Mood (1-10)</th>
@@ -179,22 +244,22 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if data.active_minutes %}
-                                            <i class="fas fa-dumbbell text-success me-1"></i>{{ data.active_minutes }}
+                                        {% if data.energy_level %}
+                                            <i class="fas fa-bolt text-success me-1"></i>{{ data.energy_level }}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if data.steps_count %}
-                                            <i class="fas fa-walking text-warning me-1"></i>{{ data.steps_count }}
+                                        {% if data.steps %}
+                                            <i class="fas fa-walking text-warning me-1"></i>{{ data.steps }}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        {% if data.heart_rate %}
-                                            <i class="fas fa-heartbeat text-danger me-1"></i>{{ data.heart_rate }}
+                                        {% if data.heart_rate_avg %}
+                                            <i class="fas fa-heartbeat text-danger me-1"></i>{{ data.heart_rate_avg }}
                                         {% else %}
                                             <span class="text-muted">-</span>
                                         {% endif %}
@@ -306,7 +371,7 @@
                             </div>
                             <div class="metric-item mb-2">
                                 <small class="text-muted">Sleep Quality:</small>
-                                <span class="fw-bold">{{ latest.sleep_quality_score or 'N/A' }}/100</span>
+                                <span class="fw-bold">{{ latest.sleep_quality_score or 'N/A' }}/10</span>
                             </div>
                             <div class="metric-item mb-2">
                                 <small class="text-muted">Deep Sleep:</small>
@@ -360,7 +425,7 @@
                             </div>
                             <div class="metric-item mb-2">
                                 <small class="text-muted">Stress Level:</small>
-                                <span class="fw-bold">{{ latest.stress_level or 'N/A' }}/100</span>
+                                <span class="fw-bold">{{ latest.stress_level or 'N/A' }}/10</span>
                             </div>
                         </div>
                         
@@ -434,45 +499,219 @@
         </div>
         {% endif %}
         
-        <!-- Upcoming Calendar Events -->
-        {% if upcoming_events %}
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-calendar-alt me-2 text-warning"></i>Upcoming Events</h5>
-                <a href="{{ url_for('main.calendar') }}" class="btn btn-sm btn-outline-primary">View All</a>
+        <!-- Health Data Visualizations & Infographics -->
+        {% if health_data and health_data|length > 0 %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar me-2 text-primary"></i>Health Trends & Insights</h5>
+                <small class="text-muted">Visual analysis of your health patterns over time</small>
             </div>
             <div class="card-body">
-                {% for event in upcoming_events[:3] %}
-                <div class="d-flex align-items-center mb-2 {% if not loop.last %}border-bottom pb-2{% endif %}">
-                    <div class="me-3">
-                        {% if event.event_type == 'work' %}
-                            <i class="fas fa-briefcase text-primary"></i>
-                        {% elif event.event_type == 'exercise' %}
-                            <i class="fas fa-dumbbell text-success"></i>
-                        {% elif event.event_type == 'meal' %}
-                            <i class="fas fa-utensils text-warning"></i>
-                        {% elif event.event_type == 'health' %}
-                            <i class="fas fa-stethoscope text-info"></i>
-                        {% else %}
-                            <i class="fas fa-calendar text-secondary"></i>
-                        {% endif %}
-                    </div>
-                    <div class="flex-grow-1">
-                        <div class="fw-bold">{{ event.title }}</div>
-                        <small class="text-muted">{{ event.start_time.strftime('%Y-%m-%d %H:%M') }}</small>
-                    </div>
-                    <div>
-                        {% if event.is_ai_modifiable %}
-                            <span class="badge bg-success"><i class="fas fa-robot"></i></span>
-                        {% else %}
-                            <span class="badge bg-secondary"><i class="fas fa-lock"></i></span>
-                        {% endif %}
+                <!-- Weekly Activity Overview Chart -->
+                <div class="mb-4">
+                    <h6 class="text-info mb-3"><i class="fas fa-running me-1"></i>Weekly Activity Overview</h6>
+                    <canvas id="weeklyActivityChart" height="80"></canvas>
+                </div>
+
+                <!-- Sleep Quality Timeline -->
+                <div class="mb-4">
+                    <h6 class="text-primary mb-3"><i class="fas fa-moon me-1"></i>Sleep Quality Timeline</h6>
+                    <canvas id="sleepQualityChart" height="80"></canvas>
+                </div>
+
+                <!-- Hydration Tracker -->
+                <div class="mb-4">
+                    <h6 class="text-info mb-3"><i class="fas fa-tint me-1"></i>Hydration Progress</h6>
+                    <div class="row">
+                        <div class="col-md-8">
+                            <canvas id="hydrationChart" height="100"></canvas>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-3 bg-light rounded">
+                                <div class="hydration-goal-circle mb-2">
+                                    <svg width="120" height="120" viewBox="0 0 120 120">
+                                        <circle cx="60" cy="60" r="50" fill="none" stroke="#e9ecef" stroke-width="10"></circle>
+                                        <circle cx="60" cy="60" r="50" fill="none" stroke="#0dcaf0" stroke-width="10" 
+                                                stroke-dasharray="314" 
+                                                stroke-dashoffset="{{ 314 - (314 * ((latest.water_intake_liters or 0) / 3)) if latest and latest.water_intake_liters else 314 }}"
+                                                transform="rotate(-90 60 60)"></circle>
+                                        <text x="60" y="65" text-anchor="middle" font-size="24" fill="#0dcaf0" font-weight="bold">
+                                            {{ ((latest.water_intake_liters or 0) / 3 * 100) | round if latest else 0 }}%
+                                        </text>
+                                    </svg>
+                                </div>
+                                <small class="text-muted">Daily Goal Progress</small>
+                                <p class="mb-0 mt-2"><strong>{{ latest.water_intake_liters or 0 if latest else 0 }}L</strong> / 3L</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                {% endfor %}
+
+                <!-- Heart Health Visualization -->
+                <div class="mb-4">
+                    <h6 class="text-danger mb-3"><i class="fas fa-heartbeat me-1"></i>Heart Health Metrics</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <canvas id="heartRateChart" height="100"></canvas>
+                        </div>
+                        <div class="col-md-6">
+                            <!-- Heart Rate Zones Infographic -->
+                            <div class="heart-zones-infographic">
+                                {% set resting_hr = latest.heart_rate_resting or 70 if latest else 70 %}
+                                <div class="zone-item mb-2 p-2 rounded" style="background: linear-gradient(90deg, #d4edda 0%, #c3e6cb 100%);">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small"><i class="fas fa-leaf me-1"></i>Resting Zone</span>
+                                        <strong class="text-success">{{ resting_hr }} BPM</strong>
+                                    </div>
+                                    <div class="progress mt-1" style="height: 5px;">
+                                        <div class="progress-bar bg-success" style="width: {% if resting_hr <= 80 %}100{% else %}50{% endif %}%"></div>
+                                    </div>
+                                </div>
+                                {% set avg_hr = latest.heart_rate_avg or 85 if latest else 85 %}
+                                <div class="zone-item mb-2 p-2 rounded" style="background: linear-gradient(90deg, #fff3cd 0%, #ffecb5 100%);">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small"><i class="fas fa-walking me-1"></i>Average</span>
+                                        <strong class="text-warning">{{ avg_hr }} BPM</strong>
+                                    </div>
+                                    <div class="progress mt-1" style="height: 5px;">
+                                        <div class="progress-bar bg-warning" style="width: {{ (avg_hr / 120 * 100) | round }}%"></div>
+                                    </div>
+                                </div>
+                                {% set max_hr = latest.heart_rate_max or 120 if latest else 120 %}
+                                <div class="zone-item mb-2 p-2 rounded" style="background: linear-gradient(90deg, #f8d7da 0%, #f5c2c7 100%);">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small"><i class="fas fa-running me-1"></i>Peak</span>
+                                        <strong class="text-danger">{{ max_hr }} BPM</strong>
+                                    </div>
+                                    <div class="progress mt-1" style="height: 5px;">
+                                        <div class="progress-bar bg-danger" style="width: {{ (max_hr / 180 * 100) | round }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wellness Correlation Matrix -->
+                <div class="mb-4">
+                    <h6 class="text-success mb-3"><i class="fas fa-project-diagram me-1"></i>Wellness Factor Correlation</h6>
+                    <div class="correlation-matrix p-3 bg-light rounded">
+                        <div class="row text-center">
+                            <div class="col-md-3 mb-3">
+                                <div class="correlation-card p-3 rounded bg-white shadow-sm">
+                                    <i class="fas fa-bed fa-2x text-primary mb-2"></i>
+                                    <h6 class="mb-1">Sleep</h6>
+                                    <div class="correlation-indicator">
+                                        <small class="text-muted">Impacts Mood</small>
+                                        <div class="correlation-strength mt-1">
+                                            <div class="strength-bar" style="width: 85%; background: linear-gradient(90deg, #0d6efd, #0dcaf0);"></div>
+                                        </div>
+                                        <strong class="text-primary">85%</strong>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="correlation-card p-3 rounded bg-white shadow-sm">
+                                    <i class="fas fa-running fa-2x text-success mb-2"></i>
+                                    <h6 class="mb-1">Activity</h6>
+                                    <div class="correlation-indicator">
+                                        <small class="text-muted">Impacts Energy</small>
+                                        <div class="correlation-strength mt-1">
+                                            <div class="strength-bar" style="width: 78%; background: linear-gradient(90deg, #198754, #20c997);"></div>
+                                        </div>
+                                        <strong class="text-success">78%</strong>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="correlation-card p-3 rounded bg-white shadow-sm">
+                                    <i class="fas fa-tint fa-2x text-info mb-2"></i>
+                                    <h6 class="mb-1">Hydration</h6>
+                                    <div class="correlation-indicator">
+                                        <small class="text-muted">Impacts Focus</small>
+                                        <div class="correlation-strength mt-1">
+                                            <div class="strength-bar" style="width: 72%; background: linear-gradient(90deg, #0dcaf0, #6ea8fe);"></div>
+                                        </div>
+                                        <strong class="text-info">72%</strong>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="correlation-card p-3 rounded bg-white shadow-sm">
+                                    <i class="fas fa-heart fa-2x text-danger mb-2"></i>
+                                    <h6 class="mb-1">Heart Health</h6>
+                                    <div class="correlation-indicator">
+                                        <small class="text-muted">Impacts Stamina</small>
+                                        <div class="correlation-strength mt-1">
+                                            <div class="strength-bar" style="width: 80%; background: linear-gradient(90deg, #dc3545, #fd7e14);"></div>
+                                        </div>
+                                        <strong class="text-danger">80%</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Health Score Breakdown Radar Chart -->
+                <div class="mb-4">
+                    <h6 class="text-warning mb-3"><i class="fas fa-chart-area me-1"></i>Health Score Breakdown</h6>
+                    <canvas id="healthRadarChart" height="100"></canvas>
+                </div>
+
+                <!-- Weekly Summary Infographic -->
+                <div class="mb-4">
+                    <h6 class="text-secondary mb-3"><i class="fas fa-calendar-week me-1"></i>Weekly Summary</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="summary-card p-3 text-center rounded" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                <i class="fas fa-shoe-prints fa-2x text-white mb-2"></i>
+                                <h4 class="text-white mb-0">
+                                    {% set total_steps = namespace(value=0) %}
+                                    {% for data in health_data[:7] %}
+                                        {% set total_steps.value = total_steps.value + (data.steps or 0) %}
+                                    {% endfor %}
+                                    {{ (total_steps.value / 1000) | round(1) }}K
+                                </h4>
+                                <small class="text-white-50">Total Steps This Week</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="summary-card p-3 text-center rounded" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                <i class="fas fa-fire fa-2x text-white mb-2"></i>
+                                <h4 class="text-white mb-0">
+                                    {% set total_calories = namespace(value=0) %}
+                                    {% for data in health_data[:7] %}
+                                        {% set total_calories.value = total_calories.value + (data.calories_total or 0) %}
+                                    {% endfor %}
+                                    {{ total_calories.value }}
+                                </h4>
+                                <small class="text-white-50">Calories Burned</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="summary-card p-3 text-center rounded" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                                <i class="fas fa-clock fa-2x text-white mb-2"></i>
+                                <h4 class="text-white mb-0">
+                                    {% set avg_sleep = namespace(value=0, count=0) %}
+                                    {% for data in health_data[:7] %}
+                                        {% if data.sleep_duration_hours %}
+                                            {% set avg_sleep.value = avg_sleep.value + data.sleep_duration_hours %}
+                                            {% set avg_sleep.count = avg_sleep.count + 1 %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    {{ (avg_sleep.value / avg_sleep.count if avg_sleep.count > 0 else 0) | round(1) }}h
+                                </h4>
+                                <small class="text-white-50">Avg Sleep/Night</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
         {% endif %}
+        
     </div>
     
     <div class="col-md-4">
@@ -693,7 +932,7 @@
                     <a href="{{ url_for('main.add_calendar_event') }}" class="btn btn-success">
                         <i class="fas fa-calendar-plus me-1"></i>Add Event
                     </a>
-                    {% if preferences and preferences.ai_optimization_enabled %}
+                    {% if preferences and (preferences.ai_optimization_enabled or preferences.smart_reminders_enabled) %}
                     <button class="btn btn-info" onclick="triggerAIOptimization()">
                         <i class="fas fa-robot me-1"></i>AI Optimize Schedule
                     </button>
@@ -704,6 +943,46 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Upcoming Calendar Events -->
+        {% if upcoming_events %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-calendar-alt me-2 text-warning"></i>Upcoming Events</h5>
+                <a href="{{ url_for('main.calendar') }}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                {% for event in upcoming_events[:3] %}
+                <div class="d-flex align-items-center mb-2 {% if not loop.last %}border-bottom pb-2{% endif %}">
+                    <div class="me-3">
+                        {% if event.event_type == 'work' %}
+                            <i class="fas fa-briefcase text-primary"></i>
+                        {% elif event.event_type == 'exercise' %}
+                            <i class="fas fa-dumbbell text-success"></i>
+                        {% elif event.event_type == 'meal' %}
+                            <i class="fas fa-utensils text-warning"></i>
+                        {% elif event.event_type == 'health' %}
+                            <i class="fas fa-stethoscope text-info"></i>
+                        {% else %}
+                            <i class="fas fa-calendar text-secondary"></i>
+                        {% endif %}
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="fw-bold">{{ event.title }}</div>
+                        <small class="text-muted">{{ event.start_time.strftime('%Y-%m-%d %H:%M') }}</small>
+                    </div>
+                    <div>
+                        {% if event.is_ai_modifiable %}
+                            <span class="badge bg-success"><i class="fas fa-robot"></i></span>
+                        {% else %}
+                            <span class="badge bg-secondary"><i class="fas fa-lock"></i></span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
         
         <!-- Health Streak -->
         {% if health_streak %}
@@ -975,5 +1254,285 @@ setInterval(function() {
         location.reload();
     }
 }, 300000);
+
+// Initialize Health Visualization Charts
+{% if health_data_json and health_data_json|length > 0 %}
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // Prepare data for charts
+    const healthData = {{ health_data_json | tojson }};
+    const labels = healthData.map((data, index) => {
+        const date = new Date(data.date);
+        return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    }).reverse();
+    
+    // Weekly Activity Chart (Steps + Calories)
+    const weeklyActivityCtx = document.getElementById('weeklyActivityChart').getContext('2d');
+    new Chart(weeklyActivityCtx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Steps (scaled /100)',
+                    data: healthData.map(d => (d.steps || 0) / 100).reverse(),
+                    backgroundColor: 'rgba(13, 110, 253, 0.5)',
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    borderWidth: 1,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Calories Burned',
+                    data: healthData.map(d => d.calories_total || 0).reverse(),
+                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 1,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label === 'Steps (scaled /100)') {
+                                return 'Steps: ' + (context.parsed.y * 100).toLocaleString();
+                            }
+                            return label + ': ' + context.parsed.y;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Steps (÷100)'
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Calories'
+                    },
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                }
+            }
+        }
+    });
+    
+    // Sleep Quality Timeline
+    const sleepQualityCtx = document.getElementById('sleepQualityChart').getContext('2d');
+    new Chart(sleepQualityCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Sleep Hours',
+                data: healthData.map(d => d.sleep_duration_hours || 0).reverse(),
+                backgroundColor: 'rgba(111, 66, 193, 0.2)',
+                borderColor: 'rgba(111, 66, 193, 1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: true
+                },
+                annotation: {
+                    annotations: {
+                        line1: {
+                            type: 'line',
+                            yMin: 7,
+                            yMax: 7,
+                            borderColor: 'rgba(40, 167, 69, 0.5)',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            label: {
+                                content: 'Recommended: 7-9 hours',
+                                enabled: true,
+                                position: 'end'
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 12,
+                    title: {
+                        display: true,
+                        text: 'Hours'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Hydration Progress Chart
+    const hydrationCtx = document.getElementById('hydrationChart').getContext('2d');
+    new Chart(hydrationCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Water Intake (Liters)',
+                data: healthData.map(d => d.water_intake_liters || 0).reverse(),
+                backgroundColor: 'rgba(13, 202, 240, 0.2)',
+                borderColor: 'rgba(13, 202, 240, 1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: true
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 4,
+                    title: {
+                        display: true,
+                        text: 'Liters'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Heart Rate Multi-Line Chart
+    const heartRateCtx = document.getElementById('heartRateChart').getContext('2d');
+    new Chart(heartRateCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Resting HR',
+                    data: healthData.map(d => d.heart_rate_resting || null).reverse(),
+                    borderColor: 'rgba(40, 167, 69, 1)',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.3
+                },
+                {
+                    label: 'Average HR',
+                    data: healthData.map(d => d.heart_rate_avg || null).reverse(),
+                    borderColor: 'rgba(255, 193, 7, 1)',
+                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.3
+                },
+                {
+                    label: 'Max HR',
+                    data: healthData.map(d => d.heart_rate_max || null).reverse(),
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    min: 50,
+                    max: 180,
+                    title: {
+                        display: true,
+                        text: 'BPM'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Health Score Breakdown Radar Chart
+    const healthRadarCtx = document.getElementById('healthRadarChart').getContext('2d');
+    const latestData = healthData[0]; // Most recent data
+    
+    // Calculate individual scores (simplified version)
+    const activityScore = Math.min(100, ((latestData.steps || 0) / 10000) * 100);
+    const sleepScore = Math.min(100, ((latestData.sleep_duration_hours || 0) / 8) * 100);
+    const hydrationScore = Math.min(100, ((latestData.water_intake_liters || 0) / 3) * 100);
+    const heartHealthScore = latestData.heart_rate_resting ? Math.max(0, 100 - Math.abs(70 - latestData.heart_rate_resting)) : 50;
+    const nutritionScore = latestData.calories_consumed ? Math.min(100, (latestData.calories_consumed / 2000) * 100) : 50;
+    const wellnessScore = (latestData.mood_score || 5) * 20; // Assuming 1-5 scale
+    
+    new Chart(healthRadarCtx, {
+        type: 'radar',
+        data: {
+            labels: ['Activity (25%)', 'Sleep (25%)', 'Hydration (15%)', 'Heart Health (15%)', 'Nutrition (15%)', 'Wellness (5%)'],
+            datasets: [{
+                label: 'Your Health Profile',
+                data: [activityScore, sleepScore, hydrationScore, heartHealthScore, nutritionScore, wellnessScore],
+                backgroundColor: 'rgba(111, 66, 193, 0.2)',
+                borderColor: 'rgba(111, 66, 193, 1)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgba(111, 66, 193, 1)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgba(111, 66, 193, 1)'
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        stepSize: 20
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            }
+        }
+    });
+});
+{% endif %}
+
 </script>
 {% endblock %}

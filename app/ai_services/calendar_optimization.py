@@ -16,6 +16,7 @@ import logging
 from datetime import datetime, timedelta, time
 from typing import Dict, List, Optional, Tuple
 import google.generativeai as genai
+from google.genai import types
 import spacy
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -36,7 +37,13 @@ class CalendarOptimizationService:
         self.nlp = None
         self.gemini_model = None
         self.calendar_service = None
-        self.setup_services()
+        self._services_setup = False
+    
+    def _ensure_services_setup(self):
+        """Ensure services are set up (deferred until Flask context is available)"""
+        if not self._services_setup:
+            self.setup_services()
+            self._services_setup = True
     
     def setup_services(self):
         """Setup AI and calendar services"""
@@ -45,7 +52,19 @@ class CalendarOptimizationService:
             api_key = current_app.config.get('GEMINI_API_KEY')
             if api_key:
                 genai.configure(api_key=api_key)
-                self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+                
+                # Use dictionary format for generation config (compatible with current version)
+                generation_config = {
+                    "response_mime_type": "application/json",
+                    "temperature": 0.7,
+                    "top_p": 0.8,
+                    "top_k": 40
+                }
+                
+                self.gemini_model = genai.GenerativeModel(
+                    'gemini-2.5-flash',
+                    generation_config=generation_config
+                )
             
             # Setup spaCy for event analysis
             try:
@@ -61,6 +80,7 @@ class CalendarOptimizationService:
         Analyze event text to extract type and scheduling preferences
         Uses spaCy NLP to understand event context
         """
+        self._ensure_services_setup()
         if not self.nlp:
             return self._basic_event_analysis(event_text)
         
@@ -136,9 +156,13 @@ class CalendarOptimizationService:
         AI-powered schedule optimization
         Implements research: AI schedule optimization with user control
         """
+        self._ensure_services_setup()
         try:
             if not self.gemini_model:
+                logger.warning("Gemini model not available, using basic optimization")
                 return self._basic_schedule_optimization(user_events, health_data, preferences)
+            
+            logger.info(f"🤖 CALLING GEMINI AI for schedule optimization with {len(user_events)} events")
             
             # Prepare context for AI
             context = self._prepare_schedule_context(user_events, health_data, preferences)
@@ -156,6 +180,7 @@ class CalendarOptimizationService:
             Context:
             {context}
             
+            RETURN ONLY VALID JSON - NO MARKDOWN, NO EXPLANATIONS, NO CODE BLOCKS
             Provide optimization suggestions in JSON format:
             {{
                 "schedule_changes": [
@@ -175,19 +200,27 @@ class CalendarOptimizationService:
                 "insights": ["list of insights about the schedule"]
             }}
             
+            RETURN ONLY THE JSON OBJECT - NO ADDITIONAL TEXT
             Only suggest realistic, beneficial changes.
             """
             
+            logger.info("📡 Sending request to Gemini AI...")
             response = self.gemini_model.generate_content(prompt)
+            logger.info(f"📨 Gemini AI response received: {len(response.text) if response.text else 0} characters")
             
             if response.text:
                 try:
                     # Parse AI response
                     optimization_result = json.loads(response.text)
+                    logger.info(f"✅ Gemini AI optimization successful: {len(optimization_result.get('schedule_changes', []))} changes, {len(optimization_result.get('new_reminders', []))} reminders")
                     return optimization_result
-                except json.JSONDecodeError:
-                    logger.error("Failed to parse AI optimization response")
+                except json.JSONDecodeError as e:
+                    logger.error(f"❌ Failed to parse AI optimization response: {e}")
+                    logger.error(f"Raw response: {response.text[:200]}...")
                     return self._basic_schedule_optimization(user_events, health_data, preferences)
+            else:
+                logger.warning("🔕 Gemini AI returned empty response")
+                return self._basic_schedule_optimization(user_events, health_data, preferences)
             
         except Exception as e:
             logger.error(f"Error in AI schedule optimization: {e}")
@@ -200,16 +233,29 @@ class CalendarOptimizationService:
         # Current events
         events_info = []
         for event in user_events:
-            event_info = {
-                'id': event.id,
-                'title': event.title,
-                'start': event.start_time.isoformat(),
-                'end': event.end_time.isoformat(),
-                'type': event.event_type,
-                'priority': event.priority_level,
-                'fixed': event.is_fixed_time,
-                'ai_modifiable': event.is_ai_modifiable
-            }
+            # Handle both dictionary and object formats
+            if isinstance(event, dict):
+                event_info = {
+                    'id': event.get('id'),
+                    'title': event.get('title'),
+                    'start': event.get('start_time'),
+                    'end': event.get('end_time'),
+                    'type': event.get('event_type'),
+                    'priority': event.get('priority_level', 3),
+                    'fixed': event.get('is_fixed_time', False),
+                    'ai_modifiable': event.get('is_ai_modifiable', True)
+                }
+            else:
+                event_info = {
+                    'id': event.id,
+                    'title': event.title,
+                    'start': event.start_time.isoformat(),
+                    'end': event.end_time.isoformat(),
+                    'type': event.event_type,
+                    'priority': event.priority_level,
+                    'fixed': event.is_fixed_time,
+                    'ai_modifiable': event.is_ai_modifiable
+                }
             events_info.append(event_info)
         
         context_parts.append(f"Current events: {json.dumps(events_info, indent=2)}")
@@ -220,18 +266,35 @@ class CalendarOptimizationService:
         
         # User preferences
         if preferences:
-            prefs_info = {
-                'water_goal': preferences.daily_water_goal,
-                'sleep_goal': preferences.daily_sleep_goal,
-                'steps_goal': preferences.daily_steps_goal,
-                'quiet_hours_start': preferences.quiet_hours_start.strftime('%H:%M'),
-                'quiet_hours_end': preferences.quiet_hours_end.strftime('%H:%M'),
-                'reminders_enabled': {
-                    'water': preferences.reminder_water,
-                    'exercise': preferences.reminder_exercise,
-                    'sleep': preferences.reminder_sleep
+            # Handle both dictionary and object formats
+            if isinstance(preferences, dict):
+                prefs_info = {
+                    'water_goal': preferences.get('daily_water_goal', 2.5),
+                    'sleep_goal': preferences.get('daily_sleep_goal', 8),
+                    'steps_goal': preferences.get('daily_steps_goal', 10000),
+                    'quiet_hours_start': preferences.get('quiet_hours_start', '22:00'),
+                    'quiet_hours_end': preferences.get('quiet_hours_end', '07:00'),
+                    'reminders_enabled': {
+                        'water': preferences.get('reminder_water', True),
+                        'exercise': preferences.get('reminder_exercise', True),
+                        'sleep': preferences.get('reminder_sleep', True),
+                        'mindfulness': preferences.get('reminder_mindfulness', True)
+                    }
                 }
-            }
+            else:
+                prefs_info = {
+                    'water_goal': preferences.daily_water_goal,
+                    'sleep_goal': preferences.daily_sleep_goal,
+                    'steps_goal': preferences.daily_steps_goal,
+                    'quiet_hours_start': preferences.quiet_hours_start.strftime('%H:%M'),
+                    'quiet_hours_end': preferences.quiet_hours_end.strftime('%H:%M'),
+                    'reminders_enabled': {
+                        'water': preferences.reminder_water,
+                        'exercise': preferences.reminder_exercise,
+                        'sleep': preferences.reminder_sleep,
+                        'mindfulness': preferences.reminder_mindfulness
+                    }
+                }
             context_parts.append(f"User preferences: {json.dumps(prefs_info, indent=2)}")
         
         return '\n'.join(context_parts)
@@ -277,6 +340,7 @@ class CalendarOptimizationService:
         Generate smart reminders based on schedule and health patterns
         Implements research: adaptive reminders based on user behavior
         """
+        self._ensure_services_setup()
         reminders = []
         
         if not preferences:
@@ -423,5 +487,5 @@ class CalendarOptimizationService:
         
         return f"😴 Wind down time! Aim for {sleep_goal} hours of quality sleep tonight. Consider dimming lights and avoiding screens."
 
-# Singleton instance
-calendar_service = CalendarOptimizationService()
+# Remove module-level instantiation to avoid app context errors
+# Use get_calendar_service() from ai_services/__init__.py instead

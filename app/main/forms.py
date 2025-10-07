@@ -8,6 +8,7 @@ user-friendly interfaces for data entry with proper constraints.
 
 # FLASK-WTF IMPORT - Secure form handling (pattern already explained in auth/forms.py)
 from flask_wtf import FlaskForm
+from datetime import date
 
 # WTFORMS FIELD IMPORTS - Form input field types
 from wtforms import FloatField, IntegerField, SelectField, SubmitField, StringField, TextAreaField, BooleanField, DateTimeField, DateField
@@ -41,8 +42,8 @@ class HealthDataForm(FlaskForm):
     """
     
     # DATE AND SOURCE - When and how data was logged
-    date_logged = DateField('Date', validators=[DataRequired()], 
-                           render_kw={"type": "date"})
+    date_logged = DateField('Date', validators=[Optional()], 
+                           render_kw={"type": "date"}, default=date.today)
     
     data_source = SelectField('Data Source', 
                              choices=[('manual', 'Manual Entry'),
@@ -219,7 +220,7 @@ class HealthDataForm(FlaskForm):
                          render_kw={"placeholder": "Optional notes about this health data entry", "rows": 3})
     
     # FORM SUBMISSION BUTTON
-    submit = SubmitField('Update Health Data')
+    submit = SubmitField('Add Log Data')
 
 # CALENDAR EVENT FORM - Form for creating and editing calendar events
 class CalendarEventForm(FlaskForm):
@@ -287,7 +288,7 @@ class UserPreferencesForm(FlaskForm):
     ], default='normal')
     
     # HEALTH GOALS - Personalized targets
-    daily_water_goal = IntegerField('Daily Water Goal (glasses)', validators=[
+    daily_water_goal = IntegerField('Daily Water Goal (glasses, 1 glass = 250ml)', validators=[
         NumberRange(min=1, max=20, message="Water goal must be between 1 and 20 glasses")
     ], default=8)
     
@@ -307,8 +308,8 @@ class UserPreferencesForm(FlaskForm):
     reminder_water = BooleanField('Water intake reminders', default=True)
     reminder_exercise = BooleanField('Exercise reminders', default=True)
     reminder_sleep = BooleanField('Sleep reminders', default=True)
-    reminder_medication = BooleanField('Medication reminders', default=False)
     reminder_meal = BooleanField('Meal reminders', default=False)
+    reminder_mindfulness = BooleanField('Mindfulness reminders', default=True)
     smart_reminders_enabled = BooleanField('Enable smart adaptive reminders', default=True)
     
     submit = SubmitField('Save Preferences')

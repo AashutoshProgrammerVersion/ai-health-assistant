@@ -7,7 +7,7 @@ and AI-powered features. Routes connect URLs to Python functions that generate r
 """
 
 # FLASK CORE IMPORTS - Essential Flask functionality (patterns already explained in auth/routes.py)
-from flask import render_template, redirect, url_for, flash, request, jsonify, session, current_app
+from flask import render_template, redirect, url_for, flash, request, jsonify, session, current_app, Response
 import logging
 import json
 
@@ -44,10 +44,10 @@ from app import db
 'from app import db' - Import database instance (already explained)
 """
 
-from app.models import HealthData, CalendarEvent, UserPreferences, AIRecommendation
+from app.models import HealthData, CalendarEvent, UserPreferences, AIRecommendation, EventBackup
 """
-'from app.models import HealthData, CalendarEvent, UserPreferences, AIRecommendation' - Import models
-All the database models we created for comprehensive health and calendar management
+'from app.models import HealthData, CalendarEvent, UserPreferences, AIRecommendation, EventBackup' - Import models
+All the database models we created for comprehensive health and calendar management including event backup
 """
 
 from app.main.forms import HealthDataForm, CalendarEventForm, UserPreferencesForm
@@ -64,6 +64,85 @@ from app.health_file_processor import get_health_processor
 Updated imports - removed Samsung Health service, added health file processor
 Uses the successful Gemini 2.5 Flash approach from the test application
 """
+
+# HELPER FUNCTIONS
+def calculate_ai_confidence(health_data_count: int, optimization_result: dict, 
+                           schedule_changes: int, reminders_created: int) -> float:
+    """
+    Calculate dynamic AI confidence based on multiple factors
+    
+    Args:
+        health_data_count: Number of days of health data available
+        optimization_result: The optimization result dictionary
+        schedule_changes: Number of events moved
+        reminders_created: Number of reminders created
+    
+    Returns:
+        Confidence score between 0.0 and 1.0
+    """
+    # Base confidence starts at 0.5
+    confidence = 0.5
+    
+    # Factor 1: Data Quality (up to +0.25)
+    # More days of data = higher confidence
+    if health_data_count >= 30:
+        confidence += 0.25
+    elif health_data_count >= 14:
+        confidence += 0.20
+    elif health_data_count >= 7:
+        confidence += 0.15
+    elif health_data_count >= 3:
+        confidence += 0.10
+    else:
+        confidence += 0.05
+    
+    # Factor 2: AI Source (up to +0.20)
+    # Check if Gemini AI was used (look for 'gemini' in optimization tips or high-quality insights)
+    optimization_tips = optimization_result.get('optimization_tips', [])
+    ai_insights = optimization_result.get('ai_insights', [])
+    
+    gemini_indicators = ['Gemini AI', 'AI analysis', 'intelligent', 'personalized based on']
+    uses_gemini = any(
+        any(indicator.lower() in str(tip).lower() for indicator in gemini_indicators)
+        for tip in (optimization_tips + ai_insights)
+    )
+    
+    if uses_gemini:
+        confidence += 0.20  # Gemini AI active
+    elif len(ai_insights) > 0:
+        confidence += 0.10  # Some AI insights present
+    else:
+        confidence += 0.05  # Fallback/rule-based only
+    
+    # Factor 3: Optimization Quality (up to +0.15)
+    # Successfully created changes = higher confidence
+    total_actions = schedule_changes + reminders_created
+    if total_actions >= 10:
+        confidence += 0.15
+    elif total_actions >= 5:
+        confidence += 0.12
+    elif total_actions >= 3:
+        confidence += 0.08
+    elif total_actions >= 1:
+        confidence += 0.05
+    
+    # Factor 4: Pattern Analysis (up to +0.10)
+    # Check if health patterns were found
+    schedule_changes_list = optimization_result.get('schedule_changes', [])
+    if schedule_changes_list:
+        # Look for variety in optimization reasons (indicates sophisticated analysis)
+        reasons = set(change.get('reason', '') for change in schedule_changes_list)
+        if len(reasons) >= 3:
+            confidence += 0.10  # Diverse, thoughtful optimizations
+        elif len(reasons) >= 2:
+            confidence += 0.07
+        else:
+            confidence += 0.03
+    
+    # Ensure confidence stays within valid range [0.5, 1.0]
+    confidence = max(0.5, min(1.0, confidence))
+    
+    return round(confidence, 2)
 
 # HOME PAGE ROUTE - Landing page and entry point
 @bp.route('/')
@@ -242,17 +321,37 @@ def dashboard():
                             'weight_kg': data.weight_kg,
                             'body_fat_percent': data.body_fat_percent,
                             'muscle_mass_kg': data.muscle_mass_kg,
+                            'bmi': data.bmi,
                             
-                            # Lifestyle Metrics
+                            # Nutrition Metrics
                             'water_intake_liters': data.water_intake_liters,
+                            'calories_consumed': data.calories_consumed,
+                            'protein_grams': data.protein_grams,
+                            'carbs_grams': data.carbs_grams,
+                            'fat_grams': data.fat_grams,
+                            'fiber_grams': data.fiber_grams,
+                            
+                            # Blood Pressure
+                            'systolic_bp': data.systolic_bp,
+                            'diastolic_bp': data.diastolic_bp,
+                            
+                            # Subjective Wellness Metrics
                             'mood_score': data.mood_score,
                             'energy_level': data.energy_level,
+                            
+                            # Lifestyle & Mental Wellness
+                            'meditation_minutes': data.meditation_minutes,
+                            'screen_time_hours': data.screen_time_hours,
+                            'social_interactions': data.social_interactions,
                             
                             # Exercise Session Details
                             'workout_type': data.workout_type,
                             'workout_duration_minutes': data.workout_duration_minutes,
                             'workout_intensity': data.workout_intensity,
-                            'workout_calories': data.workout_calories
+                            'workout_calories': data.workout_calories,
+                            
+                            # User Notes
+                            'notes': data.notes
                         } for data in recent_data[:7]  # Last 7 days for context
                     ],
                     'health_score': health_score,
@@ -294,17 +393,45 @@ def dashboard():
     ).limit(5).all()
     
     # CALCULATE TODAY'S PROGRESS FOR DASHBOARD DISPLAY
-    today_data = None
-    if recent_data:
-        today_data = recent_data[0]  # Most recent entry
+    today = date.today()
+    today_data = current_user.health_data.filter(
+        HealthData.date_logged >= today,
+        HealthData.date_logged < today + timedelta(days=1)
+    ).first()
     
+    # Extract today's metrics with fallbacks
     sleep_hours = today_data.sleep_duration_hours if today_data and today_data.sleep_duration_hours else 0
+    water_consumed = today_data.water_intake_liters if today_data and today_data.water_intake_liters else 0
+    steps_taken = today_data.steps if today_data and today_data.steps else 0
+    
+    # Get goals from preferences with fallbacks
     sleep_goal = preferences.daily_sleep_goal if preferences.daily_sleep_goal else 8
+    water_goal_glasses = preferences.daily_water_goal if preferences.daily_water_goal else 8
+    water_goal = water_goal_glasses * 0.25  # Convert glasses (8oz each) to liters (8 glasses ≈ 2 liters)
+    steps_goal = preferences.daily_steps_goal if preferences.daily_steps_goal else 10000
+    
+    # Convert health data to JSON-serializable format for chart rendering
+    health_data_json = []
+    for data in recent_data[:7]:
+        health_data_json.append({
+            'date': data.date_logged.strftime('%Y-%m-%d') if data.date_logged else None,
+            'steps': data.steps,
+            'calories_total': data.calories_total,
+            'sleep_duration_hours': data.sleep_duration_hours,
+            'water_intake_liters': data.water_intake_liters,
+            'heart_rate_resting': data.heart_rate_resting,
+            'heart_rate_avg': data.heart_rate_avg,
+            'heart_rate_max': data.heart_rate_max,
+            'calories_consumed': data.calories_consumed,
+            'mood_score': data.mood_score
+        })
     
     # RENDER ENHANCED DASHBOARD
     return render_template('dashboard.html', 
                          title='Dashboard', 
-                         health_data=recent_data[:7],  # Show last 7 days
+                         health_data=recent_data[:7],  # Show last 7 days (for template iteration)
+                         health_data_json=health_data_json,  # JSON-serializable for charts
+                         latest=recent_data[0] if recent_data else None,  # Most recent entry for detailed display
                          health_score=health_score,
                          activity_score=individual_scores['activity_score'],
                          sleep_score=individual_scores['sleep_score'],
@@ -312,8 +439,14 @@ def dashboard():
                          hydration_score=individual_scores['hydration_score'],
                          heart_health_score=individual_scores['heart_health_score'],
                          wellness_score=individual_scores['wellness_score'],
+                         # Today's actual values
                          sleep_hours=sleep_hours,
+                         water_consumed=water_consumed,
+                         steps_taken=steps_taken,
+                         # Goals from preferences
                          sleep_goal=sleep_goal,
+                         water_goal=water_goal,
+                         steps_goal=steps_goal,
                          health_patterns=health_patterns,
                          ai_advice=ai_advice,
                          upcoming_events=upcoming_events,
@@ -345,8 +478,12 @@ def log_data():
         Same validation pattern as in auth routes
         """
         
+        logger.info("Form validation passed, processing health data submission")
+        
         # CHECK FOR EXISTING DATA TODAY
         today = date.today()
+        # Use form date if provided, otherwise use today's date
+        log_date = form.date_logged.data if form.date_logged.data else today
         """
         'today = date.today()' - Get current date
         'date.today()' - Returns today's date (year, month, day)
@@ -355,7 +492,7 @@ def log_data():
         
         existing_data = HealthData.query.filter_by(
             user_id=current_user.id, 
-            date_logged=today
+            date_logged=log_date
         ).first()
         """
         'existing_data = HealthData.query.filter_by(...).first()' - Look for today's data
@@ -374,102 +511,28 @@ def log_data():
             If user already logged data today, update it instead of creating duplicate
             """
             
-            # UPDATE EXISTING RECORD WITH COMPREHENSIVE HEALTH METRICS
-            # Activity Metrics
-            existing_data.steps = form.steps.data
-            existing_data.distance_km = form.distance_km.data
-            existing_data.calories_total = form.calories_total.data
-            existing_data.active_minutes = form.active_minutes.data
-            existing_data.floors_climbed = form.floors_climbed.data
-            
-            # Heart Rate Metrics
-            existing_data.heart_rate_avg = form.heart_rate_avg.data
-            existing_data.heart_rate_resting = form.heart_rate_resting.data
-            existing_data.heart_rate_max = form.heart_rate_max.data
-            existing_data.heart_rate_variability = form.heart_rate_variability.data
-            
-            # Sleep Metrics
+            # UPDATE EXISTING RECORD - Only update fields that exist in the simple template
             existing_data.sleep_duration_hours = form.sleep_duration_hours.data
-            existing_data.sleep_quality_score = form.sleep_quality_score.data
-            existing_data.sleep_deep_minutes = form.sleep_deep_minutes.data
-            existing_data.sleep_light_minutes = form.sleep_light_minutes.data
-            existing_data.sleep_rem_minutes = form.sleep_rem_minutes.data
-            existing_data.sleep_awake_minutes = form.sleep_awake_minutes.data
-            
-            # Advanced Health Metrics
-            existing_data.blood_oxygen_percent = form.blood_oxygen_percent.data
-            existing_data.stress_level = form.stress_level.data
-            existing_data.body_temperature = form.body_temperature.data
-            
-            # Body Composition Metrics
-            existing_data.weight_kg = form.weight_kg.data
-            existing_data.body_fat_percent = form.body_fat_percent.data
-            existing_data.muscle_mass_kg = form.muscle_mass_kg.data
-            
-            # Lifestyle Metrics
             existing_data.water_intake_liters = form.water_intake_liters.data
+            existing_data.active_minutes = form.active_minutes.data
             existing_data.mood_score = form.mood_score.data
-            existing_data.energy_level = form.energy_level.data
-            
-            # Exercise Session Details
-            existing_data.workout_type = form.workout_type.data
-            existing_data.workout_duration_minutes = form.workout_duration_minutes.data
-            existing_data.workout_intensity = form.workout_intensity.data
-            existing_data.workout_calories = form.workout_calories.data
-            
             existing_data.updated_at = datetime.utcnow()
             existing_data.data_source = 'manual'
             
-            flash('Your comprehensive health data has been updated!', 'success')
+            flash('Your health data has been updated!', 'success')
             
         else:
-            # CREATE NEW COMPREHENSIVE HEALTH DATA RECORD
+            # CREATE NEW HEALTH DATA RECORD - Only fields from the simple template
             health_data = HealthData(
                 user_id=current_user.id,
-                date_logged=today,
+                date_logged=log_date,  # Use the determined date (today or form date)
                 data_source='manual',
                 
-                # Activity Metrics
-                steps=form.steps.data,
-                distance_km=form.distance_km.data,
-                calories_total=form.calories_total.data,
-                active_minutes=form.active_minutes.data,
-                floors_climbed=form.floors_climbed.data,
-                
-                # Heart Rate Metrics
-                heart_rate_avg=form.heart_rate_avg.data,
-                heart_rate_resting=form.heart_rate_resting.data,
-                heart_rate_max=form.heart_rate_max.data,
-                heart_rate_variability=form.heart_rate_variability.data,
-                
-                # Sleep Metrics
+                # Only the 4 fields from the template
                 sleep_duration_hours=form.sleep_duration_hours.data,
-                sleep_quality_score=form.sleep_quality_score.data,
-                sleep_deep_minutes=form.sleep_deep_minutes.data,
-                sleep_light_minutes=form.sleep_light_minutes.data,
-                sleep_rem_minutes=form.sleep_rem_minutes.data,
-                sleep_awake_minutes=form.sleep_awake_minutes.data,
-                
-                # Advanced Health Metrics
-                blood_oxygen_percent=form.blood_oxygen_percent.data,
-                stress_level=form.stress_level.data,
-                body_temperature=form.body_temperature.data,
-                
-                # Body Composition Metrics
-                weight_kg=form.weight_kg.data,
-                body_fat_percent=form.body_fat_percent.data,
-                muscle_mass_kg=form.muscle_mass_kg.data,
-                
-                # Lifestyle Metrics
                 water_intake_liters=form.water_intake_liters.data,
-                mood_score=form.mood_score.data,
-                energy_level=form.energy_level.data,
-                
-                # Exercise Session Details
-                workout_type=form.workout_type.data,
-                workout_duration_minutes=form.workout_duration_minutes.data,
-                workout_intensity=form.workout_intensity.data,
-                workout_calories=form.workout_calories.data
+                active_minutes=form.active_minutes.data,
+                mood_score=form.mood_score.data
             )
             
             db.session.add(health_data)
@@ -485,17 +548,31 @@ def log_data():
             """
         
         # SAVE CHANGES TO DATABASE
-        db.session.commit()
-        """
-        'db.session.commit()' - Save all changes to database
-        Commits both updates to existing records and new record insertions
-        """
-        
-        return redirect(url_for('main.dashboard'))
-        """
-        'return redirect(url_for('main.dashboard'))' - Redirect to dashboard
-        After successful data logging, show user their updated dashboard
-        """
+        try:
+            db.session.commit()
+            """
+            'db.session.commit()' - Save all changes to database
+            Commits both updates to existing records and new record insertions
+            """
+            logger.info("Health data saved successfully to database")
+            
+            return redirect(url_for('main.dashboard'))
+            """
+            'return redirect(url_for('main.dashboard'))' - Redirect to dashboard
+            After successful data logging, show user their updated dashboard
+            """
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Database error when saving health data: {e}")
+            flash(f'Error saving health data: {str(e)}', 'error')
+    
+    else:
+        # Log form validation errors for debugging
+        if request.method == 'POST':
+            logger.error(f"Form validation failed. Errors: {form.errors}")
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(f'{field}: {error}', 'error')
     
     # SHOW HEALTH DATA FORM (for GET requests or invalid submissions)
     return render_template('log_data.html', title='Log Health Data', form=form)
@@ -639,14 +716,39 @@ def optimize_schedule():
     Implements research requirement for AI schedule optimization with user control
     """
     try:
-        # GET USER EVENTS AND PREFERENCES
-        user_events = current_user.calendar_events.filter(
-            CalendarEvent.start_time >= datetime.now()
+        # GET USER EVENTS AND PREFERENCES - ONLY TODAY'S EVENTS
+        today = datetime.now().date()
+        today_start = datetime.combine(today, datetime.min.time())
+        today_end = datetime.combine(today + timedelta(days=1), datetime.min.time())
+        
+        user_events_objects = current_user.calendar_events.filter(
+            CalendarEvent.start_time >= today_start,
+            CalendarEvent.start_time < today_end
         ).all()
         
+        logger.info(f"Filtering to today's events only: {len(user_events_objects)} events found for {today}")
+        
+        # Convert SQLAlchemy objects to dictionaries for JSON serialization
+        user_events = [event.to_dict() for event in user_events_objects]
+        
         preferences = current_user.preferences
-        if not preferences or not preferences.ai_optimization_enabled:
-            return jsonify({'error': 'AI optimization is disabled'}), 400
+        if not preferences:
+            # Create default preferences for user if they don't exist
+            preferences = UserPreferences(
+                user_id=current_user.id,
+                ai_optimization_enabled=True,
+                reminder_water=True,
+                reminder_exercise=True,
+                reminder_sleep=True,
+                reminder_medication=False,
+                reminder_meal=False,
+                reminder_mindfulness=True  # Added mindfulness default
+            )
+            db.session.add(preferences)
+            db.session.commit()
+            
+        if not (preferences.ai_optimization_enabled or preferences.smart_reminders_enabled):
+            return jsonify({'error': 'AI features are disabled. Enable AI Schedule Optimization or Smart Adaptive Reminders in settings.'}), 400
         
         # GET RECENT HEALTH DATA FOR CONTEXT
         recent_health = current_user.health_data.order_by(
@@ -659,51 +761,273 @@ def optimize_schedule():
             'recent_steps': sum(d.steps or 0 for d in recent_health) / len(recent_health) if recent_health else 0
         }
         
+        # Convert preferences to dictionary
+        preferences_dict = {
+            'ai_optimization_enabled': preferences.ai_optimization_enabled,
+            'smart_reminders_enabled': preferences.smart_reminders_enabled,
+            'daily_water_goal': preferences.daily_water_goal,
+            'daily_sleep_goal': preferences.daily_sleep_goal,
+            'daily_steps_goal': preferences.daily_steps_goal,
+            'daily_activity_goal': preferences.daily_activity_goal,
+            'reminder_water': preferences.reminder_water,
+            'reminder_exercise': preferences.reminder_exercise,
+            'reminder_sleep': preferences.reminder_sleep,
+            'reminder_meal': preferences.reminder_meal,
+            'reminder_nutrition': preferences.reminder_meal,  # Use meal preference for nutrition
+            'reminder_mindfulness': preferences.reminder_mindfulness,
+            'quiet_hours_start': preferences.quiet_hours_start.strftime('%H:%M') if preferences.quiet_hours_start else '22:00',
+            'quiet_hours_end': preferences.quiet_hours_end.strftime('%H:%M') if preferences.quiet_hours_end else '08:00'
+        }
+        
         # RUN AI OPTIMIZATION
-        optimization_result = get_calendar_service().optimize_schedule(user_events, health_context, preferences)
+        # Check if optimization has already been completed today by looking for optimization records
+        today = datetime.now().date()
+        existing_optimization = AIRecommendation.query.filter(
+            AIRecommendation.user_id == current_user.id,
+            AIRecommendation.recommendation_type == 'schedule',
+            AIRecommendation.title == 'AI Schedule Optimization',
+            AIRecommendation.created_at >= datetime.combine(today, datetime.min.time()),
+            AIRecommendation.created_at < datetime.combine(today + timedelta(days=1), datetime.min.time())
+        ).first()
+        
+        if existing_optimization:
+            return jsonify({
+                'success': False,
+                'error': f'AI optimization already completed today at {existing_optimization.created_at.strftime("%H:%M")}.',
+                'message': 'AI optimization can only be run once per day. Use "Reset Today" to allow re-optimization.',
+                'last_optimization': existing_optimization.created_at.isoformat()
+            }), 400
+        
+        optimization_result = get_calendar_service().optimize_schedule(user_events, health_context, preferences_dict)
+        
+        # APPLY SCHEDULE CHANGES TO DATABASE WITH BACKUP
+        events_updated = 0
+        today = datetime.now().date()
+        
+        if optimization_result.get('schedule_changes'):
+            for change in optimization_result['schedule_changes']:
+                try:
+                    event_id = change.get('event_id')
+                    if event_id:
+                        # Find the event in the database
+                        event_to_update = CalendarEvent.query.filter_by(
+                            id=event_id, user_id=current_user.id
+                        ).first()
+                        
+                        if event_to_update and event_to_update.is_ai_modifiable:
+                            # CREATE BACKUP BEFORE MODIFYING - Check if backup already exists for today
+                            existing_backup = EventBackup.query.filter_by(
+                                user_id=current_user.id,
+                                event_id=event_id,
+                                optimization_date=today
+                            ).first()
+                            
+                            if not existing_backup:
+                                backup = EventBackup(
+                                    user_id=current_user.id,
+                                    event_id=event_id,
+                                    original_start_time=event_to_update.start_time,
+                                    original_end_time=event_to_update.end_time,
+                                    optimization_date=today,
+                                    backup_reason='ai_optimization'
+                                )
+                                db.session.add(backup)
+                                logger.info(f"Created backup for event '{event_to_update.title}' - Original time: {event_to_update.start_time}")
+                            
+                            # Parse the new optimized time
+                            new_start_time = datetime.strptime(change['optimized_start'], '%H:%M').time()
+                            original_date = event_to_update.start_time.date()
+                            duration = event_to_update.end_time - event_to_update.start_time
+                            
+                            # Update the event times
+                            event_to_update.start_time = datetime.combine(original_date, new_start_time)
+                            event_to_update.end_time = event_to_update.start_time + duration
+                            
+                            events_updated += 1
+                            logger.info(f"Updated event '{event_to_update.title}' to new time: {new_start_time}")
+                            
+                except Exception as e:
+                    logger.warning(f"Failed to apply schedule change: {e}")
+                    continue
         
         # CREATE CALENDAR EVENTS FOR NEW REMINDERS
+        reminders_created = 0
+        reminder_types_created = []
+        
         if optimization_result.get('new_reminders'):
             for reminder in optimization_result['new_reminders']:
                 try:
-                    # Parse reminder time
-                    reminder_time = datetime.fromisoformat(reminder['time'].replace('Z', '+00:00'))
+                    # Parse reminder time more carefully
+                    reminder_time_str = reminder['time']
+                    if reminder_time_str.endswith('Z'):
+                        reminder_time_str = reminder_time_str[:-1] + '+00:00'
+                    
+                    reminder_time = datetime.fromisoformat(reminder_time_str)
                     if reminder_time.tzinfo:
                         reminder_time = reminder_time.replace(tzinfo=None)
+                    
+                    # Get duration from reminder data
+                    duration_minutes = reminder.get('duration_minutes', 5)
+                    
+                    # Create appropriate emoji and title based on type
+                    reminder_type = reminder['type']
+                    emoji_map = {
+                        'water': '💧',
+                        'hydration': '💧',  # Support both water and hydration types
+                        'exercise': '🏃',
+                        'sleep': '😴',
+                        'meal': '🍽️',
+                        'nutrition': '🍽️',
+                        'mindfulness': '🧘‍♀️',
+                        'meditation': '🧘‍♀️'
+                    }
+                    
+                    emoji = emoji_map.get(reminder_type, '⏰')
+                    title = f"{emoji} {reminder['message']}"
                     
                     # Create calendar event for the reminder
                     reminder_event = CalendarEvent(
                         user_id=current_user.id,
-                        title=f"💧 {reminder['message']}" if reminder['type'] == 'water' else f"🏃 {reminder['message']}" if reminder['type'] == 'exercise' else f"😴 {reminder['message']}" if reminder['type'] == 'sleep' else reminder['message'],
-                        description=f"AI-generated {reminder['type']} reminder",
+                        title=title,
+                        description=f"AI-generated {reminder_type} reminder - Auto-created by your health assistant",
                         start_time=reminder_time,
-                        end_time=reminder_time + timedelta(minutes=5),  # 5-minute reminder events
+                        end_time=reminder_time + timedelta(minutes=duration_minutes),
                         event_type='personal',
-                        priority_level=reminder.get('priority', 2),
+                        priority_level=reminder.get('priority', 3),
                         is_ai_modifiable=True,
                         is_fixed_time=False
                     )
                     db.session.add(reminder_event)
+                    reminders_created += 1
+                    reminder_types_created.append(reminder_type)
+                    
+                    logger.info(f"Created {reminder_type} reminder: {title} at {reminder_time}")
+                    
                 except Exception as reminder_error:
                     logger.warning(f"Could not create reminder event: {reminder_error}")
                     continue
         
-        # SAVE AI RECOMMENDATIONS
+        # Log reminder preferences vs what was actually created
+        enabled_reminders = [k.replace('reminder_', '') for k, v in preferences_dict.items() if k.startswith('reminder_') and v]
+        logger.info(f"Reminder preferences enabled: {enabled_reminders}")
+        logger.info(f"Reminder types actually created: {list(set(reminder_types_created))}")
+        
+        # CALCULATE DYNAMIC AI CONFIDENCE based on multiple factors
+        health_data_count = len(recent_health)
+        calculated_confidence = calculate_ai_confidence(
+            health_data_count=health_data_count,
+            optimization_result=optimization_result,
+            schedule_changes=events_updated,
+            reminders_created=reminders_created
+        )
+        
+        logger.info(f"AI Confidence calculated: {calculated_confidence:.0%} (based on {health_data_count} days of data, {events_updated} events moved, {reminders_created} reminders)")
+        
+        # SAVE AI RECOMMENDATIONS with calculated confidence
         if optimization_result.get('schedule_changes') or optimization_result.get('new_reminders'):
             recommendation = AIRecommendation(
                 user_id=current_user.id,
                 recommendation_type='schedule',
                 title='AI Schedule Optimization',
-                description=f"Generated {len(optimization_result.get('schedule_changes', []))} schedule suggestions and {len(optimization_result.get('new_reminders', []))} reminders",
-                ai_confidence=0.8
+                description=f"Moved {events_updated} events to optimal times and created {reminders_created} health reminders for today",
+                ai_confidence=calculated_confidence  # Using dynamic confidence calculation
             )
             db.session.add(recommendation)
-            db.session.commit()
+        
+        # Commit all changes
+        db.session.commit()
+        
+        # Update the result message with comprehensive info
+        optimization_result['message'] = f"AI optimization completed: Moved {events_updated} events to optimal times and created {reminders_created} health reminders for today"
+        optimization_result['reminders_created'] = reminders_created
+        optimization_result['events_moved'] = events_updated
+        optimization_result['optimization_date'] = datetime.now().date().isoformat()
+        
+        logger.info(f"AI optimization completed: Moved {events_updated} events, Created {reminders_created} reminders")
         
         return jsonify(optimization_result)
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@bp.route('/ai/reset_today_optimization', methods=['POST'])
+@login_required  
+def reset_today_optimization():
+    """
+    Reset today's AI optimization - restores events to original times and removes AI-generated reminders
+    Comprehensive reset that undoes all optimization changes for today
+    """
+    try:
+        today = datetime.now().date()
+        
+        # STEP 1: RESTORE EVENTS TO ORIGINAL TIMES FROM BACKUPS
+        backups_today = EventBackup.query.filter_by(
+            user_id=current_user.id,
+            optimization_date=today
+        ).all()
+        
+        events_restored = 0
+        for backup in backups_today:
+            try:
+                # Find the event that was modified
+                event_to_restore = CalendarEvent.query.filter_by(
+                    id=backup.event_id,
+                    user_id=current_user.id
+                ).first()
+                
+                if event_to_restore:
+                    # Restore original times
+                    event_to_restore.start_time = backup.original_start_time
+                    event_to_restore.end_time = backup.original_end_time
+                    events_restored += 1
+                    logger.info(f"Restored event '{event_to_restore.title}' to original time: {backup.original_start_time}")
+                
+                # Delete the backup record
+                db.session.delete(backup)
+                
+            except Exception as e:
+                logger.warning(f"Failed to restore event from backup {backup.id}: {e}")
+                continue
+        
+        # STEP 2: REMOVE AI-GENERATED REMINDERS FOR TODAY
+        ai_reminders_today = current_user.calendar_events.filter(
+            CalendarEvent.start_time >= datetime.combine(today, datetime.min.time()),
+            CalendarEvent.start_time < datetime.combine(today + timedelta(days=1), datetime.min.time()),
+            CalendarEvent.description.like('%AI-generated%')
+        ).all()
+        
+        reminders_removed = len(ai_reminders_today)
+        for reminder in ai_reminders_today:
+            db.session.delete(reminder)
+            logger.info(f"Removed AI reminder: {reminder.title}")
+        
+        # STEP 3: REMOVE AI OPTIMIZATION RECORDS FOR TODAY
+        optimization_records_today = AIRecommendation.query.filter(
+            AIRecommendation.user_id == current_user.id,
+            AIRecommendation.recommendation_type == 'schedule',
+            AIRecommendation.title == 'AI Schedule Optimization',
+            AIRecommendation.created_at >= datetime.combine(today, datetime.min.time()),
+            AIRecommendation.created_at < datetime.combine(today + timedelta(days=1), datetime.min.time())
+        ).all()
+        
+        records_removed = len(optimization_records_today)
+        for record in optimization_records_today:
+            db.session.delete(record)
+        
+        # Commit all changes
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Reset complete: Restored {events_restored} events to original times, removed {reminders_removed} AI reminders, and deleted {records_removed} optimization records',
+            'events_restored': events_restored,
+            'reminders_removed': reminders_removed,
+            'records_removed': records_removed
+        })
+        
+    except Exception as e:
+        logger.error(f"Error resetting today's optimization: {e}")
+        return jsonify({'error': f'Reset failed: {str(e)}'}), 500
 
 @bp.route('/ai/generate_reminders', methods=['POST'])
 @login_required
@@ -713,10 +1037,13 @@ def generate_smart_reminders():
     Implements adaptive reminders from research
     """
     try:
-        user_events = current_user.calendar_events.filter(
+        user_events_objects = current_user.calendar_events.filter(
             CalendarEvent.start_time >= datetime.now(),
             CalendarEvent.start_time <= datetime.now() + timedelta(days=1)
         ).all()
+        
+        # Convert SQLAlchemy objects to dictionaries for JSON serialization
+        user_events = [event.to_dict() for event in user_events_objects]
         
         preferences = current_user.preferences
         if not preferences:
@@ -732,8 +1059,17 @@ def generate_smart_reminders():
             'recent_steps': sum(d.steps or 0 for d in recent_health) / len(recent_health) if recent_health else 0
         }
         
+        # Convert preferences to dictionary
+        preferences_dict = {
+            'reminder_water': preferences.reminder_water,
+            'reminder_exercise': preferences.reminder_exercise,
+            'reminder_sleep': preferences.reminder_sleep,
+            'daily_water_goal': preferences.daily_water_goal,
+            'daily_activity_goal': preferences.daily_activity_goal
+        }
+        
         # GENERATE SMART REMINDERS
-        reminders = get_calendar_service().generate_smart_reminders(user_events, health_context, preferences)
+        reminders = get_calendar_service().generate_smart_reminders(user_events, health_context, preferences_dict)
         
         return jsonify({'reminders': reminders})
         
@@ -889,8 +1225,8 @@ def user_preferences():
         preferences.reminder_water = form.reminder_water.data
         preferences.reminder_exercise = form.reminder_exercise.data
         preferences.reminder_sleep = form.reminder_sleep.data
-        preferences.reminder_medication = form.reminder_medication.data
         preferences.reminder_meal = form.reminder_meal.data
+        preferences.reminder_mindfulness = form.reminder_mindfulness.data
         preferences.smart_reminders_enabled = form.smart_reminders_enabled.data
         preferences.updated_at = datetime.utcnow()
         
@@ -930,6 +1266,120 @@ def health_data_upload():
                          title='Upload Health Data',
                          supported_formats=current_app.config.get('ALLOWED_HEALTH_FILE_EXTENSIONS', 
                                                                 {'csv', 'json', 'txt', 'xml', 'pdf'}))
+
+@bp.route('/health_data/progress')
+@login_required
+def get_progress():
+    """
+    Get current processing progress for the user (legacy endpoint for compatibility)
+    """
+    from app.health_file_processor import PROGRESS_STORE
+    
+    user_id = current_user.id
+    progress_key = f'health_data_progress_{user_id}'
+    
+    # Try global store first, fallback to session
+    progress = PROGRESS_STORE.get(progress_key)
+    if not progress:
+        progress = session.get(progress_key, {
+            'step': 0,
+            'total_steps': 4,
+            'message': 'Initializing...',
+            'percentage': 0,
+            'estimated_time': None,
+            'start_time': None
+        })
+    
+    return jsonify(progress)
+
+@bp.route('/health_data/test_progress')
+@login_required
+def test_progress():
+    """
+    Test endpoint to simulate progress updates (for debugging)
+    """
+    import time
+    import json
+    
+    user_id = current_user.id  # Get user ID before entering generator
+    
+    def generate():
+        # Send test progress updates
+        for step in range(1, 5):
+            progress_data = {
+                'step': step,
+                'total_steps': 4,
+                'message': f'Test step {step}: {"File selection" if step == 1 else "Chunking" if step == 2 else "Processing" if step == 3 else "Merging"}...',
+                'percentage': (step / 4) * 100,
+                'estimated_time': (4 - step) * 10,
+                'type': 'progress'
+            }
+            
+            # Update session with user ID
+            session[f'health_data_progress_{user_id}'] = progress_data
+            
+            yield f"data: {json.dumps(progress_data)}\n\n"
+            time.sleep(2)  # Wait 2 seconds between updates
+        
+        # Send completion
+        yield f"data: {json.dumps({'type': 'complete', 'message': 'Test complete'})}\n\n"
+    
+    response = Response(generate(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+@bp.route('/health_data/progress_stream')
+@login_required
+def progress_stream():
+    """
+    Server-Sent Events stream for real-time progress updates
+    """
+    user_id = current_user.id  # Get user ID before entering generator
+    
+    def generate():
+        import time
+        import json
+        from app.health_file_processor import PROGRESS_STORE
+        
+        # Send initial connection event
+        yield f"data: {json.dumps({'type': 'connected', 'message': 'Progress stream connected'})}\n\n"
+        
+        last_progress = None
+        max_iterations = 300  # 5 minutes max (300 seconds)
+        iteration = 0
+        
+        while iteration < max_iterations:
+            try:
+                # Get current progress from global store
+                current_progress = PROGRESS_STORE.get(user_id)
+                
+                if current_progress:
+                    # Always send progress update if it exists
+                    if current_progress != last_progress:
+                        current_progress['type'] = 'progress'
+                        yield f"data: {json.dumps(current_progress)}\n\n"
+                        last_progress = current_progress.copy()
+                    
+                    # If processing is complete, send completion event and close
+                    if current_progress.get('step', 0) >= current_progress.get('total_steps', 4):
+                        yield f"data: {json.dumps({'type': 'complete', 'message': 'Processing complete'})}\n\n"
+                        break
+                
+                time.sleep(1)  # Check every second
+                iteration += 1
+                
+            except Exception as e:
+                logger.error(f"SSE stream error: {e}")
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                break
+    
+    response = Response(generate(), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
 
 @bp.route('/health_data/process', methods=['POST'])
 @login_required  
@@ -1054,16 +1504,80 @@ def edit_health_data(data_id):
     # Get the health data entry (ensure it belongs to current user)
     health_data = HealthData.query.filter_by(id=data_id, user_id=current_user.id).first_or_404()
     
-    # Create form with existing data
-    form = HealthDataForm(obj=health_data)
+    # Create form and manually populate with existing data due to field name mismatches
+    form = HealthDataForm()
+    
+    # On GET request, populate form with existing data
+    if request.method == 'GET':
+        # Date and source
+        form.date_logged.data = health_data.date_logged
+        form.data_source.data = health_data.data_source or 'manual'
+        
+        # Activity Metrics
+        form.steps.data = health_data.steps
+        form.distance_km.data = health_data.distance_km
+        form.calories_burned.data = health_data.calories_total  # Map DB field to form field
+        form.active_minutes.data = health_data.active_minutes
+        
+        # Heart Rate Metrics
+        form.heart_rate_avg.data = health_data.heart_rate_avg
+        form.heart_rate_resting.data = health_data.heart_rate_resting
+        form.heart_rate_max.data = health_data.heart_rate_max
+        form.heart_rate_variability.data = health_data.heart_rate_variability
+        
+        # Sleep Metrics
+        form.sleep_duration_hours.data = health_data.sleep_duration_hours
+        form.sleep_quality_score.data = health_data.sleep_quality_score
+        # Convert minutes to hours for display
+        form.deep_sleep_hours.data = health_data.sleep_deep_minutes / 60 if health_data.sleep_deep_minutes else None
+        form.rem_sleep_hours.data = health_data.sleep_rem_minutes / 60 if health_data.sleep_rem_minutes else None
+        form.sleep_awake_minutes.data = health_data.sleep_awake_minutes
+        
+        # Advanced Health Metrics
+        form.oxygen_saturation.data = health_data.blood_oxygen_percent  # Map DB field to form field
+        form.systolic_bp.data = health_data.systolic_bp
+        form.diastolic_bp.data = health_data.diastolic_bp
+        form.stress_level.data = health_data.stress_level
+        form.body_temperature.data = health_data.body_temperature
+        
+        # Body Composition Metrics
+        form.weight_kg.data = health_data.weight_kg
+        form.body_fat_percentage.data = health_data.body_fat_percent  # Map DB field to form field
+        form.muscle_mass_kg.data = health_data.muscle_mass_kg
+        form.bmi.data = health_data.bmi
+        
+        # Nutrition Metrics
+        form.calories_consumed.data = health_data.calories_consumed
+        form.protein_grams.data = health_data.protein_grams
+        form.carbs_grams.data = health_data.carbs_grams
+        form.fat_grams.data = health_data.fat_grams
+        form.fiber_grams.data = health_data.fiber_grams
+        
+        # Lifestyle Metrics
+        form.water_intake_liters.data = health_data.water_intake_liters
+        form.mood_score.data = health_data.mood_score
+        form.energy_level.data = health_data.energy_level
+        form.meditation_minutes.data = health_data.meditation_minutes
+        form.screen_time_hours.data = health_data.screen_time_hours
+        form.social_interactions.data = health_data.social_interactions
+        
+        # Exercise Session Details
+        form.exercise_type.data = health_data.workout_type  # Map DB field to form field
+        form.exercise_duration_minutes.data = health_data.workout_duration_minutes  # Map DB field to form field
+        
+        # Notes
+        form.notes.data = health_data.notes
     
     if form.validate_on_submit():
-        # Update all the fields from the form
+        # Update date and source
+        health_data.date_logged = form.date_logged.data
+        
+        # Activity Metrics
         health_data.steps = form.steps.data
         health_data.distance_km = form.distance_km.data
-        health_data.calories_total = form.calories_total.data
+        health_data.calories_total = form.calories_burned.data  # Form field is calories_burned
         health_data.active_minutes = form.active_minutes.data
-        health_data.floors_climbed = form.floors_climbed.data
+        # Note: floors_climbed exists in DB but not in form yet
         
         # Heart Rate Metrics
         health_data.heart_rate_avg = form.heart_rate_avg.data
@@ -1074,39 +1588,69 @@ def edit_health_data(data_id):
         # Sleep Metrics
         health_data.sleep_duration_hours = form.sleep_duration_hours.data
         health_data.sleep_quality_score = form.sleep_quality_score.data
-        health_data.sleep_deep_minutes = form.sleep_deep_minutes.data
-        health_data.sleep_light_minutes = form.sleep_light_minutes.data
-        health_data.sleep_rem_minutes = form.sleep_rem_minutes.data
+        # Convert hours to minutes for deep and REM sleep
+        if form.deep_sleep_hours.data:
+            health_data.sleep_deep_minutes = int(form.deep_sleep_hours.data * 60)
+        if form.rem_sleep_hours.data:
+            health_data.sleep_rem_minutes = int(form.rem_sleep_hours.data * 60)
         health_data.sleep_awake_minutes = form.sleep_awake_minutes.data
+        # Note: sleep_light_minutes exists in DB but not in form
         
-        # Advanced Health Metrics
-        health_data.blood_oxygen_percent = form.blood_oxygen_percent.data
+        # Advanced Health Metrics (mapping form names to DB names)
+        health_data.blood_oxygen_percent = form.oxygen_saturation.data  # Form field is oxygen_saturation
+        health_data.systolic_bp = form.systolic_bp.data
+        health_data.diastolic_bp = form.diastolic_bp.data
         health_data.stress_level = form.stress_level.data
         health_data.body_temperature = form.body_temperature.data
         
         # Body Composition Metrics
         health_data.weight_kg = form.weight_kg.data
-        health_data.body_fat_percent = form.body_fat_percent.data
+        health_data.body_fat_percent = form.body_fat_percentage.data  # Form field is body_fat_percentage
         health_data.muscle_mass_kg = form.muscle_mass_kg.data
+        health_data.bmi = form.bmi.data
+        
+        # Nutrition Metrics
+        health_data.calories_consumed = form.calories_consumed.data
+        health_data.protein_grams = form.protein_grams.data
+        health_data.carbs_grams = form.carbs_grams.data
+        health_data.fat_grams = form.fat_grams.data
+        health_data.fiber_grams = form.fiber_grams.data
         
         # Lifestyle Metrics
         health_data.water_intake_liters = form.water_intake_liters.data
         health_data.mood_score = form.mood_score.data
         health_data.energy_level = form.energy_level.data
+        health_data.meditation_minutes = form.meditation_minutes.data
+        health_data.screen_time_hours = form.screen_time_hours.data
+        health_data.social_interactions = form.social_interactions.data
         
-        # Exercise Session Details
-        health_data.workout_type = form.workout_type.data
-        health_data.workout_duration_minutes = form.workout_duration_minutes.data
-        health_data.workout_intensity = form.workout_intensity.data
-        health_data.workout_calories = form.workout_calories.data
+        # Exercise Session Details (mapping form names to DB names)
+        health_data.workout_type = form.exercise_type.data  # Form field is exercise_type
+        health_data.workout_duration_minutes = form.exercise_duration_minutes.data  # Form field is exercise_duration_minutes
+        # Note: workout_intensity and workout_calories exist in DB but not in form yet
+        
+        # Notes
+        health_data.notes = form.notes.data
         
         # Update metadata
         health_data.updated_at = datetime.utcnow()
-        health_data.data_source = 'manual'  # Mark as manually edited
+        health_data.data_source = form.data_source.data or 'manual'
         
-        db.session.commit()
-        flash(f'Health data for {health_data.date_logged.strftime("%Y-%m-%d")} has been updated!', 'success')
-        return redirect(url_for('main.manage_health_data'))
+        try:
+            db.session.commit()
+            flash(f'Health data for {health_data.date_logged.strftime("%Y-%m-%d")} has been updated!', 'success')
+            return redirect(url_for('main.manage_health_data'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating health data: {str(e)}', 'error')
+            logger.error(f"Error updating health data: {e}")
+    
+    # Log form errors for debugging
+    if form.errors:
+        logger.error(f"Form validation errors: {form.errors}")
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field}: {error}', 'error')
     
     return render_template('edit_health_data.html', 
                          title='Edit Health Data', 

@@ -13,8 +13,13 @@ Based on extensive research into health app features and AI recommendations.
 import os
 import json
 import logging
+import warnings
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
+
+# Suppress numpy warnings that appear during health data calculations
+warnings.filterwarnings('ignore', category=RuntimeWarning, module='numpy')
+
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
@@ -22,6 +27,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 import spacy
 import google.generativeai as genai
+from google.genai import types
 from flask import current_app
 
 # Configure logging
@@ -47,8 +53,20 @@ class HealthAIService:
             api_key = current_app.config.get('GEMINI_API_KEY')
             if api_key and api_key not in ['demo_api_key', 'your-actual-gemini-api-key-here', 'test_api_key']:
                 genai.configure(api_key=api_key)
-                self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
-                logger.info("Gemini AI configured successfully")
+                
+                # Use dictionary format for generation config (compatible with current version)
+                generation_config = {
+                    "response_mime_type": "application/json",
+                    "temperature": 0.7,
+                    "top_p": 0.8,
+                    "top_k": 40
+                }
+                
+                self.gemini_model = genai.GenerativeModel(
+                    'gemini-2.5-flash',
+                    generation_config=generation_config
+                )
+                logger.info("Gemini AI configured successfully with JSON response")
             else:
                 if api_key in ['demo_api_key', 'your-actual-gemini-api-key-here', 'test_api_key']:
                     logger.info("Using demo API key - AI features will use fallback responses")
@@ -173,7 +191,8 @@ class HealthAIService:
                 components += 1
             
             if components > 0:
-                scores.append(day_score / components * (100/100))  # Normalize to 100
+                # Points already sum to 100 (steps: 40, active: 30, workout: 30)
+                scores.append(day_score)
         
         return sum(scores) / len(scores) if scores else 0.0
     
@@ -205,18 +224,19 @@ class HealthAIService:
                 components += 1
             
             if components > 0:
-                scores.append(day_score / components * (100/50))  # Normalize to 100
+                # Points already sum to 100 (duration: 50, quality: 50)
+                scores.append(day_score)
         
         return sum(scores) / len(scores) if scores else 0.0
     
     def _calculate_nutrition_score(self, recent_data: List) -> float:
         """Calculate nutrition score based on available dietary data"""
         if not recent_data:
-            return 50.0  # Default neutral score when no data
+            return 0.0  # Return 0 when no data available
         
         scores = []
         for data in recent_data:
-            day_score = 50  # Start with neutral score
+            day_score = 50  # Start with neutral score for days with some data
             
             # Body composition trends (if available)
             if data.weight_kg is not None and data.body_fat_percent is not None:
@@ -230,7 +250,7 @@ class HealthAIService:
             
             scores.append(min(day_score, 100))
         
-        return sum(scores) / len(scores) if scores else 50.0
+        return sum(scores) / len(scores) if scores else 0.0
     
     def _calculate_hydration_score(self, recent_data: List) -> float:
         """Calculate hydration score based on water intake"""
@@ -297,7 +317,8 @@ class HealthAIService:
                 components += 1
             
             if components > 0:
-                scores.append(day_score / components * (100/100))  # Normalize to 100
+                # Points already sum to 100 (resting HR: 40, HRV: 30, blood O2: 30)
+                scores.append(day_score)
         
         return sum(scores) / len(scores) if scores else 0.0
     
@@ -328,7 +349,8 @@ class HealthAIService:
                 components += 1
             
             if components > 0:
-                scores.append(day_score / components * (100/100))  # Normalize to 100
+                # Points already sum to 100 (stress: 30, screen time: 40, mindfulness: 30)
+                scores.append(day_score)
         
         return sum(scores) / len(scores) if scores else 0.0
     
@@ -369,12 +391,40 @@ class HealthAIService:
             data_rows = []
             for data in health_data_list:
                 row = {
-                    'sleep_hours': data.sleep_duration_hours or 0,
-                    'water_intake': data.water_intake_liters or 0,
-                    'activity_level': data.active_minutes or 0,
-                    'heart_rate': data.heart_rate_avg or 0,
+                    # Activity Metrics
                     'steps_count': data.steps or 0,
+                    'activity_level': data.active_minutes or 0,
+                    'distance_km': data.distance_km or 0,
+                    'floors_climbed': data.floors_climbed or 0,
+                    
+                    # Sleep Metrics
+                    'sleep_hours': data.sleep_duration_hours or 0,
+                    'sleep_quality': data.sleep_quality_score or 0,
+                    'deep_sleep_min': data.sleep_deep_minutes or 0,
+                    'rem_sleep_min': data.sleep_rem_minutes or 0,
+                    
+                    # Heart Health
+                    'heart_rate': data.heart_rate_avg or 0,
+                    'resting_hr': data.heart_rate_resting or 0,
+                    'hrv': data.heart_rate_variability or 0,
+                    
+                    # Nutrition
+                    'water_intake': data.water_intake_liters or 0,
+                    'calories_consumed': data.calories_consumed or 0,
+                    'protein_grams': data.protein_grams or 0,
+                    'carbs_grams': data.carbs_grams or 0,
+                    'fiber_grams': data.fiber_grams or 0,
+                    
+                    # Wellness
                     'mood': data.mood_score or 0,
+                    'energy': data.energy_level or 0,
+                    'stress': data.stress_level or 0,
+                    
+                    # Lifestyle
+                    'meditation_min': data.meditation_minutes or 0,
+                    'screen_time_hrs': data.screen_time_hours or 0,
+                    'social_interactions': data.social_interactions or 0,
+                    
                     'date': data.date_logged
                 }
                 data_rows.append(row)
@@ -402,21 +452,54 @@ class HealthAIService:
             return {"error": str(e)}
     
     def _find_health_correlations(self, df: pd.DataFrame) -> Dict:
-        """Find correlations between health metrics"""
-        numeric_cols = ['sleep_hours', 'water_intake', 'activity_level', 'heart_rate', 'steps_count', 'mood']
+        """Find correlations between health metrics - Enhanced with nutrition & lifestyle"""
+        # All numeric columns to analyze
+        numeric_cols = [
+            'steps_count', 'activity_level', 'distance_km', 'floors_climbed',
+            'sleep_hours', 'sleep_quality', 'deep_sleep_min', 'rem_sleep_min',
+            'heart_rate', 'resting_hr', 'hrv',
+            'water_intake', 'calories_consumed', 'protein_grams', 'carbs_grams', 'fiber_grams',
+            'mood', 'energy', 'stress',
+            'meditation_min', 'screen_time_hrs', 'social_interactions'
+        ]
+        
         correlations = {}
         
-        for col in numeric_cols:
-            if col in df.columns:
-                corr_with_mood = df[col].corr(df['mood']) if 'mood' in df.columns else 0
-                correlations[f"{col}_mood_correlation"] = round(corr_with_mood, 3) if not np.isnan(corr_with_mood) else 0
+        # Find correlations with mood (primary wellness indicator)
+        if 'mood' in df.columns:
+            for col in numeric_cols:
+                if col in df.columns and col != 'mood':
+                    corr_with_mood = df[col].corr(df['mood']) if 'mood' in df.columns else 0
+                    correlations[f"{col}_mood_correlation"] = round(corr_with_mood, 3) if not np.isnan(corr_with_mood) else 0
+        
+        # Find correlations with energy (another key indicator)
+        if 'energy' in df.columns:
+            for col in numeric_cols:
+                if col in df.columns and col != 'energy':
+                    corr_with_energy = df[col].corr(df['energy']) if 'energy' in df.columns else 0
+                    correlations[f"{col}_energy_correlation"] = round(corr_with_energy, 3) if not np.isnan(corr_with_energy) else 0
+        
+        # Key correlations: Sleep quality vs various factors
+        if 'sleep_quality' in df.columns:
+            for col in ['screen_time_hrs', 'meditation_min', 'stress', 'activity_level']:
+                if col in df.columns:
+                    corr = df[col].corr(df['sleep_quality'])
+                    correlations[f"{col}_sleep_correlation"] = round(corr, 3) if not np.isnan(corr) else 0
         
         return correlations
     
     def _detect_health_trends(self, df: pd.DataFrame) -> Dict:
-        """Detect trends in health metrics over time"""
+        """Detect trends in health metrics over time - Enhanced with all metrics"""
         trends = {}
-        numeric_cols = ['sleep_hours', 'water_intake', 'activity_level', 'steps_count']
+        # Expanded list of metrics to analyze for trends
+        numeric_cols = [
+            'sleep_hours', 'sleep_quality', 'deep_sleep_min',
+            'water_intake', 'calories_consumed', 'protein_grams', 'fiber_grams',
+            'activity_level', 'steps_count', 'distance_km',
+            'resting_hr', 'hrv',
+            'mood', 'energy', 'stress',
+            'meditation_min', 'screen_time_hrs', 'social_interactions'
+        ]
         
         for col in numeric_cols:
             if col in df.columns and len(df) > 1:
@@ -444,26 +527,74 @@ class HealthAIService:
         return trends
     
     def _generate_health_insights(self, correlations: Dict, trends: Dict) -> List[str]:
-        """Generate human-readable health insights"""
+        """Generate human-readable health insights - Enhanced with comprehensive analysis"""
         insights = []
         
-        # Correlation insights
-        for corr_key, corr_value in correlations.items():
-            if abs(corr_value) > 0.5:  # Strong correlation
-                metric = corr_key.replace('_mood_correlation', '')
-                if corr_value > 0:
-                    insights.append(f"Higher {metric.replace('_', ' ')} appears to improve your mood")
-                else:
-                    insights.append(f"Higher {metric.replace('_', ' ')} may negatively affect your mood")
+        # Priority insights based on strong correlations with mood and energy
+        priority_correlations = [
+            ('sleep_hours_mood_correlation', 'sleep duration', 'mood'),
+            ('sleep_quality_mood_correlation', 'sleep quality', 'mood'),
+            ('activity_level_mood_correlation', 'physical activity', 'mood'),
+            ('meditation_min_mood_correlation', 'meditation', 'mood'),
+            ('screen_time_hrs_mood_correlation', 'screen time', 'mood'),
+            ('water_intake_mood_correlation', 'hydration', 'mood'),
+            ('protein_grams_energy_correlation', 'protein intake', 'energy levels'),
+            ('fiber_grams_energy_correlation', 'fiber intake', 'energy levels'),
+            ('social_interactions_mood_correlation', 'social interactions', 'mood'),
+        ]
         
-        # Trend insights
-        for metric, trend in trends.items():
-            if trend == 'increasing':
-                insights.append(f"Your {metric.replace('_', ' ')} has been improving over time")
-            elif trend == 'decreasing':
-                insights.append(f"Your {metric.replace('_', ' ')} has been declining recently")
+        for corr_key, metric_name, impact in priority_correlations:
+            if corr_key in correlations:
+                corr_value = correlations[corr_key]
+                if abs(corr_value) > 0.5:  # Strong correlation
+                    if corr_value > 0:
+                        insights.append(f"Higher {metric_name} appears to improve your {impact}")
+                    else:
+                        insights.append(f"Higher {metric_name} may negatively affect your {impact}")
         
-        return insights[:5]  # Limit to top 5 insights
+        # Sleep quality specific insights
+        if 'screen_time_hrs_sleep_correlation' in correlations:
+            corr = correlations['screen_time_hrs_sleep_correlation']
+            if corr < -0.4:
+                insights.append("Excessive screen time appears to reduce your sleep quality")
+        
+        if 'meditation_min_sleep_correlation' in correlations:
+            corr = correlations['meditation_min_sleep_correlation']
+            if corr > 0.4:
+                insights.append("Meditation appears to improve your sleep quality")
+        
+        # Trend insights with context
+        important_trends = {
+            'sleep_hours': 'sleep duration',
+            'water_intake': 'hydration',
+            'activity_level': 'physical activity',
+            'meditation_min': 'meditation practice',
+            'screen_time_hrs': 'screen time',
+            'stress': 'stress levels',
+            'protein_grams': 'protein intake',
+            'fiber_grams': 'fiber intake'
+        }
+        
+        for metric, friendly_name in important_trends.items():
+            if metric in trends:
+                trend = trends[metric]
+                if trend == 'increasing':
+                    # Positive trends
+                    if metric in ['sleep_hours', 'water_intake', 'activity_level', 'meditation_min', 'protein_grams', 'fiber_grams']:
+                        insights.append(f"Great progress! Your {friendly_name} has been improving")
+                    # Negative trends
+                    elif metric in ['screen_time_hrs', 'stress']:
+                        insights.append(f"Attention needed: Your {friendly_name} has been increasing")
+                elif trend == 'decreasing':
+                    # Concerning decreases
+                    if metric in ['sleep_hours', 'water_intake', 'activity_level', 'meditation_min']:
+                        insights.append(f"Your {friendly_name} has been declining - consider addressing this")
+                    # Positive decreases
+                    elif metric in ['screen_time_hrs', 'stress']:
+                        insights.append(f"Excellent! Your {friendly_name} has been decreasing")
+        
+        # Limit to top 8 most actionable insights
+        return insights[:8]
     
     def generate_personalized_advice(self, user_context: Dict, health_patterns: Dict) -> Dict:
         """
@@ -602,7 +733,7 @@ Respond with JSON only:"""
             return self._generate_fallback_advice(user_context, health_patterns)
     
     def _generate_fallback_advice(self, user_context: Dict, health_patterns: Dict) -> Dict:
-        """Generate advice using rule-based system when AI is unavailable"""
+        """Generate advice using rule-based system when AI is unavailable - Enhanced"""
         
         recent_health = user_context.get('recent_health', [])
         goals = user_context.get('goals', {})
@@ -646,6 +777,14 @@ Respond with JSON only:"""
                 concerns.append("Your sleep duration appears insufficient for optimal health.")
                 recommendations.append("Prioritize sleep hygiene: dark room, cool temperature, no screens 1 hour before bed.")
         
+        # Analyze sleep quality (enhanced)
+        sleep_quality_data = [day.get('sleep_quality_score') for day in recent_health if day.get('sleep_quality_score')]
+        if sleep_quality_data:
+            avg_quality = sum(sleep_quality_data) / len(sleep_quality_data)
+            if avg_quality < 60:
+                concerns.append("Your sleep quality scores suggest room for improvement.")
+                recommendations.append("Consider reducing caffeine intake after 2 PM and establishing a wind-down routine.")
+        
         # Analyze hydration
         water_data = [day.get('water_intake_liters') for day in recent_health if day.get('water_intake_liters')]
         if water_data:
@@ -658,8 +797,60 @@ Respond with JSON only:"""
                 recommendations.append("Set hourly reminders to drink water throughout the day.")
                 quick_wins.append("Keep a water bottle visible on your desk or workspace.")
         
-        # Generate motivation message
+        # Analyze nutrition (NEW)
+        protein_data = [day.get('protein_grams') for day in recent_health if day.get('protein_grams')]
+        if protein_data:
+            avg_protein = sum(protein_data) / len(protein_data)
+            if avg_protein < 50:  # Minimum recommended
+                recommendations.append("Consider increasing protein intake to support muscle maintenance and satiety.")
+        
+        fiber_data = [day.get('fiber_grams') for day in recent_health if day.get('fiber_grams')]
+        if fiber_data:
+            avg_fiber = sum(fiber_data) / len(fiber_data)
+            if avg_fiber < 25:  # Recommended daily intake
+                recommendations.append("Boost your fiber intake with whole grains, fruits, and vegetables for better digestive health.")
+        
+        # Analyze stress levels (NEW)
+        stress_data = [day.get('stress_level') for day in recent_health if day.get('stress_level')]
+        if stress_data:
+            avg_stress = sum(stress_data) / len(stress_data)
+            if avg_stress > 60:
+                concerns.append("Your stress levels appear elevated. This may impact sleep and overall well-being.")
+                recommendations.append("Try stress-reduction techniques like deep breathing, meditation, or gentle exercise.")
+                quick_wins.append("Practice 5 minutes of deep breathing before bed.")
+        
+        # Analyze meditation practice (NEW)
+        meditation_data = [day.get('meditation_minutes') for day in recent_health if day.get('meditation_minutes')]
+        if meditation_data:
+            total_meditation = sum(meditation_data)
+            if total_meditation > 0:
+                insights.append(f"You've been practicing mindfulness - keep building this healthy habit!")
+        else:
+            quick_wins.append("Try a 5-minute guided meditation app to reduce stress and improve focus.")
+        
+        # Analyze screen time (NEW)
+        screen_data = [day.get('screen_time_hours') for day in recent_health if day.get('screen_time_hours')]
+        if screen_data:
+            avg_screen = sum(screen_data) / len(screen_data)
+            if avg_screen > 8:
+                concerns.append("High screen time may impact sleep quality and eye health.")
+                recommendations.append("Follow the 20-20-20 rule: Every 20 minutes, look at something 20 feet away for 20 seconds.")
+                quick_wins.append("Set a screen time limit on your devices for non-work hours.")
+        
+        # Analyze heart rate variability (NEW)
+        hrv_data = [day.get('heart_rate_variability') for day in recent_health if day.get('heart_rate_variability')]
+        if hrv_data:
+            avg_hrv = sum(hrv_data) / len(hrv_data)
+            if avg_hrv > 50:
+                insights.append("Your heart rate variability suggests good cardiovascular health and recovery.")
+            elif avg_hrv < 30:
+                recommendations.append("Low HRV may indicate stress or insufficient recovery. Prioritize rest and relaxation.")
+        
+        # Generate motivation message based on actual progress
         motivation = "Remember, small consistent changes lead to big improvements in health and well-being. You're taking positive steps by tracking your health data!"
+        
+        if len(insights) >= 2:
+            motivation = "You're making great progress! Your consistent tracking shows commitment to your health journey."
         
         if not insights:
             insights.append("Start logging your daily health metrics to get personalized insights.")
@@ -681,7 +872,7 @@ Respond with JSON only:"""
         }
     
     def _prepare_health_summary(self, user_context: Dict) -> str:
-        """Prepare a formatted summary of health data for AI analysis"""
+        """Prepare a comprehensive formatted summary of health data for AI analysis"""
         recent_health = user_context.get('recent_health', [])
         
         if not recent_health:
@@ -690,31 +881,127 @@ Respond with JSON only:"""
         summary_lines = []
         for day in recent_health:
             date = day.get('date', 'Unknown date')
-            summary_lines.append(f"\nDate: {date}")
+            summary_lines.append(f"\n📅 Date: {date}")
             
-            # Activity summary
+            # Activity Metrics
+            activity_data = []
             if day.get('steps'):
-                summary_lines.append(f"  Steps: {day['steps']}")
+                activity_data.append(f"Steps: {day['steps']}")
             if day.get('active_minutes'):
-                summary_lines.append(f"  Active minutes: {day['active_minutes']}")
+                activity_data.append(f"Active: {day['active_minutes']} min")
+            if day.get('distance_km'):
+                activity_data.append(f"Distance: {day['distance_km']:.1f} km")
+            if day.get('floors_climbed'):
+                activity_data.append(f"Floors: {day['floors_climbed']}")
+            if day.get('calories_total'):
+                activity_data.append(f"Calories burned: {day['calories_total']}")
+            if activity_data:
+                summary_lines.append(f"  🏃 Activity: {', '.join(activity_data)}")
             
-            # Sleep summary
+            # Sleep Metrics
+            sleep_data = []
             if day.get('sleep_duration_hours'):
-                summary_lines.append(f"  Sleep: {day['sleep_duration_hours']} hours")
+                sleep_data.append(f"Duration: {day['sleep_duration_hours']}h")
             if day.get('sleep_quality_score'):
-                summary_lines.append(f"  Sleep quality: {day['sleep_quality_score']}/100")
+                sleep_data.append(f"Quality: {day['sleep_quality_score']}/100")
+            if day.get('sleep_deep_minutes'):
+                sleep_data.append(f"Deep: {day['sleep_deep_minutes']}min")
+            if day.get('sleep_rem_minutes'):
+                sleep_data.append(f"REM: {day['sleep_rem_minutes']}min")
+            if day.get('sleep_light_minutes'):
+                sleep_data.append(f"Light: {day['sleep_light_minutes']}min")
+            if sleep_data:
+                summary_lines.append(f"  😴 Sleep: {', '.join(sleep_data)}")
             
-            # Health metrics
+            # Heart Health Metrics
+            heart_data = []
             if day.get('heart_rate_resting'):
-                summary_lines.append(f"  Resting HR: {day['heart_rate_resting']} BPM")
-            if day.get('water_intake_liters'):
-                summary_lines.append(f"  Water: {day['water_intake_liters']} liters")
+                heart_data.append(f"Resting: {day['heart_rate_resting']} BPM")
+            if day.get('heart_rate_avg'):
+                heart_data.append(f"Avg: {day['heart_rate_avg']} BPM")
+            if day.get('heart_rate_max'):
+                heart_data.append(f"Max: {day['heart_rate_max']} BPM")
+            if day.get('heart_rate_variability'):
+                heart_data.append(f"HRV: {day['heart_rate_variability']}ms")
+            if day.get('blood_oxygen_percent'):
+                heart_data.append(f"SpO2: {day['blood_oxygen_percent']}%")
+            if heart_data:
+                summary_lines.append(f"  ❤️ Heart: {', '.join(heart_data)}")
             
-            # Wellness indicators
+            # Blood Pressure
+            if day.get('systolic_bp') and day.get('diastolic_bp'):
+                summary_lines.append(f"  🩺 Blood Pressure: {day['systolic_bp']}/{day['diastolic_bp']} mmHg")
+            
+            # Nutrition Metrics
+            nutrition_data = []
+            if day.get('water_intake_liters'):
+                nutrition_data.append(f"Water: {day['water_intake_liters']}L")
+            if day.get('calories_consumed'):
+                nutrition_data.append(f"Calories: {day['calories_consumed']} kcal")
+            if day.get('protein_grams'):
+                nutrition_data.append(f"Protein: {day['protein_grams']}g")
+            if day.get('carbs_grams'):
+                nutrition_data.append(f"Carbs: {day['carbs_grams']}g")
+            if day.get('fat_grams'):
+                nutrition_data.append(f"Fat: {day['fat_grams']}g")
+            if day.get('fiber_grams'):
+                nutrition_data.append(f"Fiber: {day['fiber_grams']}g")
+            if nutrition_data:
+                summary_lines.append(f"  🍎 Nutrition: {', '.join(nutrition_data)}")
+            
+            # Body Composition
+            body_data = []
+            if day.get('weight_kg'):
+                body_data.append(f"Weight: {day['weight_kg']}kg")
+            if day.get('bmi'):
+                body_data.append(f"BMI: {day['bmi']:.1f}")
+            if day.get('body_fat_percent'):
+                body_data.append(f"Body Fat: {day['body_fat_percent']}%")
+            if day.get('muscle_mass_kg'):
+                body_data.append(f"Muscle: {day['muscle_mass_kg']}kg")
+            if body_data:
+                summary_lines.append(f"  ⚖️ Body: {', '.join(body_data)}")
+            
+            # Workout Details
+            if day.get('workout_type'):
+                workout_info = [f"Type: {day['workout_type']}"]
+                if day.get('workout_duration_minutes'):
+                    workout_info.append(f"{day['workout_duration_minutes']}min")
+                if day.get('workout_intensity'):
+                    workout_info.append(f"Intensity: {day['workout_intensity']}")
+                if day.get('workout_calories'):
+                    workout_info.append(f"{day['workout_calories']} cal")
+                summary_lines.append(f"  💪 Workout: {', '.join(workout_info)}")
+            
+            # Wellness & Mental Health
+            wellness_data = []
             if day.get('mood_score'):
-                summary_lines.append(f"  Mood: {day['mood_score']}/10")
+                wellness_data.append(f"Mood: {day['mood_score']}/10")
+            if day.get('energy_level'):
+                wellness_data.append(f"Energy: {day['energy_level']}/10")
             if day.get('stress_level'):
-                summary_lines.append(f"  Stress: {day['stress_level']}/100")
+                wellness_data.append(f"Stress: {day['stress_level']}/100")
+            if wellness_data:
+                summary_lines.append(f"  🧠 Wellness: {', '.join(wellness_data)}")
+            
+            # Lifestyle Metrics
+            lifestyle_data = []
+            if day.get('meditation_minutes'):
+                lifestyle_data.append(f"Meditation: {day['meditation_minutes']}min")
+            if day.get('screen_time_hours'):
+                lifestyle_data.append(f"Screen: {day['screen_time_hours']}h")
+            if day.get('social_interactions'):
+                lifestyle_data.append(f"Social: {day['social_interactions']} interactions")
+            if lifestyle_data:
+                summary_lines.append(f"  🌟 Lifestyle: {', '.join(lifestyle_data)}")
+            
+            # Body Temperature
+            if day.get('body_temperature'):
+                summary_lines.append(f"  🌡️ Temperature: {day['body_temperature']}°C")
+            
+            # User Notes
+            if day.get('notes'):
+                summary_lines.append(f"  📝 Notes: {day['notes']}")
         
         return '\n'.join(summary_lines)
     

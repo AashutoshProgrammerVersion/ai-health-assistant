@@ -66,15 +66,22 @@ class Config:
     """
     
     # DATABASE CONFIGURATION - Where and how to connect to the database
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(basedir, 'app.db')
+    database_url = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(basedir, 'app.db')
+    
+    # Fix for Render.com: Render provides postgres:// but SQLAlchemy needs postgresql://
+    if database_url and database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    
+    SQLALCHEMY_DATABASE_URI = database_url
     """
-    'SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(basedir, 'app.db''
     'SQLALCHEMY_DATABASE_URI' - SQLAlchemy setting that specifies database location
-    'os.environ.get('DATABASE_URL')' - Try to get database URL from environment
+    'os.environ.get('DATABASE_URL')' - Try to get database URL from environment (Render provides this)
     'sqlite:///' - SQLite database URL prefix (three slashes for local file)
-    'os.path.join(basedir, 'app.db')' - Create path to app.db file in project directory
-    '+' - String concatenation to combine URL prefix with file path
-    This tells SQLAlchemy to use a SQLite database file named app.db in our project folder
+    
+    IMPORTANT: Render.com provides DATABASE_URL with postgres:// prefix, but SQLAlchemy 1.4+
+    requires postgresql:// prefix. The if statement above handles this conversion automatically.
+    
+    Local development uses SQLite, production on Render uses PostgreSQL.
     """
     
     # SQLALCHEMY OPTIMIZATION - Disable unnecessary feature for better performance
@@ -122,7 +129,7 @@ class Config:
     
     # AI PROCESSING SETTINGS - Enhanced ML model configurations
     SPACY_MODEL = 'en_core_web_sm'  # Lightweight English model for local processing
-    GEMINI_MODEL = 'gemini-2.5-flash'  # Latest Gemini model for health data processing
+    GEMINI_MODEL = 'gemini-2.0-flash-exp'  # Latest experimental Gemini model with 32K output tokens
     HEALTH_SCORE_WEIGHTS = {
         'sleep_hours': 0.25,
         'water_intake': 0.15,
