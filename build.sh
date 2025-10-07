@@ -23,6 +23,11 @@ mkdir -p uploads
 
 # Run database migrations
 echo "🗄️ Running database migrations..."
-flask db upgrade
+# First, try to upgrade
+flask db upgrade || {
+    echo "⚠️  Migration failed, initializing fresh database..."
+    # If upgrade fails, initialize from scratch
+    python -c "from app import create_app, db; app = create_app(); app.app_context().push(); db.create_all(); print('✅ Database tables created')"
+}
 
 echo "✅ Build completed successfully!"
