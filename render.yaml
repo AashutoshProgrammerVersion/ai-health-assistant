@@ -1,7 +1,7 @@
 services:
   # Main web service
   - type: web
-    name: ai-health-assistant
+    name: ai_health-assistant-1
     env: python
     region: oregon  # Choose closest to your users: oregon, frankfurt, singapore, ohio
     plan: free
@@ -10,9 +10,9 @@ services:
     startCommand: "gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 run:app"
     
     envVars:
-      # Python version
+      # Python version - CRITICAL: Must be 3.11.x for ML dependencies
       - key: PYTHON_VERSION
-        value: "3.11.0"
+        value: "3.11.9"
       
       # Flask environment
       - key: FLASK_ENV
