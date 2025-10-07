@@ -3,6 +3,9 @@
 set -o errexit
 
 echo "🚀 Starting build process..."
+echo "⚠️  NOTE: Free tier has 512MB RAM - large file uploads may timeout"
+echo "💡 TIP: Upload smaller batches (5-10 files) to avoid memory issues"
+echo ""
 
 # Upgrade pip
 echo "📦 Upgrading pip..."

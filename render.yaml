@@ -7,7 +7,7 @@ services:
     plan: free
     branch: main
     buildCommand: "chmod +x build.sh && ./build.sh"
-    startCommand: "gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 run:app"
+    startCommand: "gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class sync --timeout 600 --graceful-timeout 600 --max-requests 50 --max-requests-jitter 10 run:app"
     
     envVars:
       # Python version - CRITICAL: Must be 3.11.x for ML dependencies
