@@ -14,7 +14,8 @@ pip install -r requirements.txt
 
 # Download spaCy language model (required for NLP features)
 echo "🧠 Downloading spaCy language model..."
-python -m spacy download en_core_web_sm
+# Use pip to install the model directly - more reliable on cloud platforms
+pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
 # Create uploads directory if it doesn't exist
 echo "📁 Creating uploads directory..."
