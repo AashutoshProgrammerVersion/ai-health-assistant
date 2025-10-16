@@ -45,7 +45,7 @@ def upgrade():
             sa.Column('id', sa.Integer(), nullable=False),
             sa.Column('user_id', sa.Integer(), nullable=False),
             sa.Column('date_logged', sa.Date(), nullable=False),
-            sa.Column('data_source', sa.String(length=50), nullable=True),
+            sa.Column('data_source', sa.String(length=100), nullable=True),
             
             # Activity metrics
             sa.Column('steps', sa.Integer(), nullable=True),
@@ -70,6 +70,7 @@ def upgrade():
             sa.Column('sleep_duration_hours', sa.Float(), nullable=True),
             sa.Column('sleep_quality_score', sa.Integer(), nullable=True),
             sa.Column('sleep_deep_minutes', sa.Integer(), nullable=True),
+            sa.Column('sleep_light_minutes', sa.Integer(), nullable=True),
             sa.Column('sleep_rem_minutes', sa.Integer(), nullable=True),
             sa.Column('sleep_awake_minutes', sa.Integer(), nullable=True),
             
@@ -103,6 +104,16 @@ def upgrade():
             
             # Notes
             sa.Column('notes', sa.Text(), nullable=True),
+            
+            # File processing metadata
+            sa.Column('processed_data', sa.Text(), nullable=True),
+            sa.Column('extraction_date', sa.DateTime(), nullable=True),
+            sa.Column('health_score', sa.Float(), nullable=True),
+            sa.Column('device_type', sa.String(length=100), nullable=True),
+            
+            # Timestamps
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.Column('updated_at', sa.DateTime(), nullable=True),
             
             sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
             sa.PrimaryKeyConstraint('id')

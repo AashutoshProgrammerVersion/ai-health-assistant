@@ -6,65 +6,34 @@ It handles environment variables, database connections, security settings, and A
 Think of this as the "settings panel" for your entire web application.
 """
 
-# STANDARD LIBRARY IMPORTS - Python built-in modules
 import os
 """
-'import os' - Imports Python's operating system interface module
-'os' - Provides functions to interact with the operating system
+Provides functions to interact with the operating system
 Used here for file paths, environment variables, and directory operations
 """
-
-# THIRD-PARTY IMPORTS - External packages we installed
+from os.path import abspath, dirname
 from dotenv import load_dotenv
 """
-'from dotenv import load_dotenv' - Import function from python-dotenv package
-'dotenv' - Package that loads environment variables from .env files
 'load_dotenv' - Specific function that reads .env file and loads variables
-This allows us to store secret keys in a .env file instead of hardcoding them
 """
 
-# DIRECTORY PATH SETUP - Finding where our application files are located
-basedir = os.path.abspath(os.path.dirname(__file__))
+basedir = abspath(dirname(__file__))
 """
-'basedir = os.path.abspath(os.path.dirname(__file__))' - Get absolute path to project directory
-'__file__' - Special Python variable containing the path to current file (config.py)
-'os.path.dirname(__file__)' - Get the directory containing this file
-'os.path.abspath()' - Convert to absolute path (complete path from root directory)
-'basedir' - Variable storing the complete path to our project folder
-This ensures we can find our database and .env files regardless of where Python runs from
+Ensures to get the absolute directory of the current file such as like where the file is stored like how basedir here would be the directory address to the folder level3
 """
 
-# ENVIRONMENT VARIABLES LOADING - Reading secret values from .env file
 load_dotenv(os.path.join(basedir, '.env'))
 """
-'load_dotenv(os.path.join(basedir, '.env'))' - Load environment variables from .env file
-'os.path.join(basedir, '.env')' - Create file path by joining directory and filename
-'os.path.join()' - Safely combines file paths (handles / vs \\ on different systems)
-'load_dotenv()' - Function that reads the .env file and makes variables available
-After this runs, we can access variables from .env using os.environ.get()
+Loads the environmental variables like stuff that helps with some of the functionality of the app to work such as connecting to APIS like Gemini and Google Calender (it is to basically to use the functionality of Google Calender and Gemini such as to get AI responses from Gemini and get the calender data from Google calender)
 """
 
-# CONFIGURATION CLASS - Container for all Flask application settings
+# Will basically contain all the configuration settings of this app
 class Config:
-    """
-    'class Config:' - Define a new class to hold configuration settings
-    'class' - Python keyword to create a new class (blueprint for objects)
-    'Config' - Name of our class (capitalized by convention)
-    ':' - Colon indicates the start of the class body
-    Flask will use this class to configure the application
-    """
-    
-    # SECURITY CONFIGURATION - Secret key for encrypting user sessions and forms
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     """
-    'SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production''
-    'SECRET_KEY' - Class attribute that Flask uses for cryptographic operations
-    'os.environ.get('SECRET_KEY')' - Try to get SECRET_KEY from environment variables
-    'or' - Python logical operator, if first value is None/empty, use second value
-    'dev-secret-key-change-in-production' - Fallback value for development
+    First choice of assignment for SECRET_KEY is the what this written in ".env" for the secret key which will be used to help set the first priority for a live server if not the second key is used for development purposes 
     This key encrypts user sessions, form tokens, and other sensitive data
-    """
-    
+    """    
     # DATABASE CONFIGURATION - Where and how to connect to the database
     database_url = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(basedir, 'app.db')
     
