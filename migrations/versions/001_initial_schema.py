@@ -63,6 +63,17 @@ def upgrade():
     sa.Column('muscle_mass_kg', sa.Float(), nullable=True),
     # Hydration
     sa.Column('water_intake_liters', sa.Float(), nullable=True),
+    # Nutrition metrics
+    sa.Column('calories_consumed', sa.Integer(), nullable=True),
+    sa.Column('protein_grams', sa.Float(), nullable=True),
+    sa.Column('carbs_grams', sa.Float(), nullable=True),
+    sa.Column('fat_grams', sa.Float(), nullable=True),
+    sa.Column('fiber_grams', sa.Float(), nullable=True),
+    # Blood pressure
+    sa.Column('systolic_bp', sa.Integer(), nullable=True),
+    sa.Column('diastolic_bp', sa.Integer(), nullable=True),
+    # BMI
+    sa.Column('bmi', sa.Float(), nullable=True),
     # Exercise details
     sa.Column('workout_type', sa.String(length=50), nullable=True),
     sa.Column('workout_duration_minutes', sa.Integer(), nullable=True),
@@ -71,6 +82,12 @@ def upgrade():
     # Subjective metrics
     sa.Column('mood_score', sa.Integer(), nullable=True),
     sa.Column('energy_level', sa.Integer(), nullable=True),
+    # Lifestyle metrics
+    sa.Column('meditation_minutes', sa.Integer(), nullable=True),
+    sa.Column('screen_time_hours', sa.Float(), nullable=True),
+    sa.Column('social_interactions', sa.Integer(), nullable=True),
+    # Notes
+    sa.Column('notes', sa.Text(), nullable=True),
     # File processing metadata
     sa.Column('data_source', sa.String(length=100), nullable=True),
     sa.Column('processed_data', sa.Text(), nullable=True),
