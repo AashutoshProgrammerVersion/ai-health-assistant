@@ -51,20 +51,22 @@ class CalendarOptimizationService:
             # Setup Gemini AI
             api_key = current_app.config.get('GEMINI_API_KEY')
             if api_key:
-                genai.configure(api_key=api_key)
+                # Create Gemini client with API key (new SDK pattern)
+                self.gemini_client = genai.Client(api_key=api_key)
                 
-                # Use dictionary format for generation config (compatible with current version)
-                generation_config = {
-                    "response_mime_type": "application/json",
-                    "temperature": 0.7,
-                    "top_p": 0.8,
-                    "top_k": 40
-                }
+                # Store model name for use in generate_content calls
+                self.gemini_model_name = 'gemini-2.5-flash'
                 
-                self.gemini_model = genai.GenerativeModel(
-                    'gemini-2.5-flash',
-                    generation_config=generation_config
+                # Store generation config for use in API calls
+                self.generation_config = types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.7,
+                    top_p=0.8,
+                    top_k=40
                 )
+            else:
+                self.gemini_client = None
+                self.gemini_model_name = None
             
             # Setup spaCy for event analysis
             try:
@@ -158,7 +160,7 @@ class CalendarOptimizationService:
         """
         self._ensure_services_setup()
         try:
-            if not self.gemini_model:
+            if not self.gemini_client:
                 logger.warning("Gemini model not available, using basic optimization")
                 return self._basic_schedule_optimization(user_events, health_data, preferences)
             
@@ -205,7 +207,11 @@ class CalendarOptimizationService:
             """
             
             logger.info("📡 Sending request to Gemini AI...")
-            response = self.gemini_model.generate_content(prompt)
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_model_name,
+                contents=prompt,
+                config=self.generation_config
+            )
             logger.info(f"📨 Gemini AI response received: {len(response.text) if response.text else 0} characters")
             
             if response.text:

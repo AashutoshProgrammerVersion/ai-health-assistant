@@ -52,30 +52,32 @@ class HealthAIService:
         try:
             api_key = current_app.config.get('GEMINI_API_KEY')
             if api_key and api_key not in ['demo_api_key', 'your-actual-gemini-api-key-here', 'test_api_key']:
-                genai.configure(api_key=api_key)
+                # Create Gemini client with API key (new SDK pattern)
+                self.gemini_client = genai.Client(api_key=api_key)
                 
-                # Use dictionary format for generation config (compatible with current version)
-                generation_config = {
-                    "response_mime_type": "application/json",
-                    "temperature": 0.7,
-                    "top_p": 0.8,
-                    "top_k": 40
-                }
+                # Store model name for use in generate_content calls
+                self.gemini_model_name = 'gemini-2.5-flash'
                 
-                self.gemini_model = genai.GenerativeModel(
-                    'gemini-2.5-flash',
-                    generation_config=generation_config
+                # Store generation config for use in API calls
+                self.generation_config = types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.7,
+                    top_p=0.8,
+                    top_k=40
                 )
+                
                 logger.info("Gemini AI configured successfully with JSON response")
             else:
                 if api_key in ['demo_api_key', 'your-actual-gemini-api-key-here', 'test_api_key']:
                     logger.info("Using demo API key - AI features will use fallback responses")
                 else:
                     logger.warning("Gemini API key not found")
-                self.gemini_model = None
+                self.gemini_client = None
+                self.gemini_model_name = None
         except Exception as e:
             logger.error(f"Failed to configure Gemini AI: {e}")
-            self.gemini_model = None
+            self.gemini_client = None
+            self.gemini_model_name = None
     
     def load_spacy_model(self):
         """Load spaCy model for natural language processing"""
@@ -606,7 +608,7 @@ class HealthAIService:
         
         try:
             # Use Gemini AI if available
-            if self.gemini_model:
+            if self.gemini_client:
                 return self._generate_ai_advice_with_gemini(user_context, health_patterns)
             else:
                 return self._generate_fallback_advice(user_context, health_patterns)
@@ -670,7 +672,11 @@ GUIDELINES:
 Respond with JSON only:"""
         
         try:
-            response = self.gemini_model.generate_content(prompt)
+            response = self.gemini_client.models.generate_content(
+                model=self.gemini_model_name,
+                contents=prompt,
+                config=self.generation_config
+            )
             
             if not response.text:
                 logger.warning("Empty response from Gemini AI")

@@ -33,7 +33,20 @@ class Config:
     """
     First choice of assignment for SECRET_KEY is the what this written in ".env" for the secret key which will be used to help set the first priority for a live server if not the second key is used for development purposes 
     This key encrypts user sessions, form tokens, and other sensitive data
-    """    
+    """
+    
+    # SESSION CONFIGURATION - User session persistence settings
+    PERMANENT_SESSION_LIFETIME = 2592000  # 30 days in seconds
+    SESSION_PERMANENT = True
+    SESSION_TYPE = 'filesystem'
+    """
+    Session configuration for login persistence:
+    - PERMANENT_SESSION_LIFETIME: How long sessions last (30 days)
+    - SESSION_PERMANENT: Make sessions survive browser restarts
+    - SESSION_TYPE: Store sessions on filesystem (more reliable than memory for production)
+    This ensures users stay logged in and can login again after app restarts
+    """
+    
     # DATABASE CONFIGURATION - Where and how to connect to the database
     database_url = os.environ.get('DATABASE_URL') or 'sqlite:///' + os.path.join(basedir, 'app.db')
     

@@ -152,6 +152,15 @@ def login():
         'form.remember_me.data' - Value of "Remember Me" checkbox
         """
         
+        # Make session permanent so it survives app restarts
+        from flask import session
+        session.permanent = True
+        """
+        'session.permanent = True' - Make session persist across app restarts
+        This ensures users can login successfully even after Render spins down the app
+        Works with PERMANENT_SESSION_LIFETIME in config.py
+        """
+        
         # HANDLE REDIRECT AFTER LOGIN
         next_page = request.args.get('next')
         """
