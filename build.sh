@@ -26,11 +26,15 @@ mkdir -p uploads
 
 # Run database migrations
 echo "🗄️ Running database migrations..."
-# First, try to upgrade
-flask db upgrade || {
-    echo "⚠️  Migration failed, initializing fresh database..."
-    # If upgrade fails, initialize from scratch
-    python -c "from app import create_app, db; app = create_app(); app.app_context().push(); db.create_all(); print('✅ Database tables created')"
-}
+# Run migrations - DO NOT fallback to db.create_all() as it wipes existing data
+flask db upgrade
+
+# If migrations fail, the build should fail to prevent data loss
+# Check if migrations directory exists
+if [ ! -d "migrations/versions" ] || [ -z "$(ls -A migrations/versions)" ]; then
+    echo "⚠️  WARNING: No migration files found!"
+    echo "💡 Run 'flask db init' and 'flask db migrate' locally first"
+    exit 1
+fi
 
 echo "✅ Build completed successfully!"
