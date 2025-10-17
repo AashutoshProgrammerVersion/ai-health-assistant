@@ -655,7 +655,7 @@ class ScheduleOptimizer:
             from app.ai_services import get_health_ai_service
             ai_service = get_health_ai_service()
             
-            if not ai_service or not ai_service.gemini_model:
+            if not ai_service or not ai_service.gemini_client:
                 logger.info("Gemini AI not available, using fallback reminders")
                 return None
             
@@ -738,7 +738,11 @@ Generate 3-8 reminders total, focusing on water (3-5), exercise (1-2), sleep (1)
 """
             
             logger.info("Requesting Gemini AI reminders...")
-            response = ai_service.gemini_model.generate_content(prompt)
+            response = ai_service.gemini_client.models.generate_content(
+                model=ai_service.gemini_model_name,
+                contents=prompt,
+                config=ai_service.generation_config
+            )
             
             if not response.text:
                 logger.warning("Empty response from Gemini AI")

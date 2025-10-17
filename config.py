@@ -11,6 +11,11 @@ import os
 Provides functions to interact with the operating system
 Used here for file paths, environment variables, and directory operations
 """
+from datetime import timedelta
+"""
+'from datetime import timedelta' - Import timedelta for time duration calculations
+Used for session expiration times and cookie durations
+"""
 from os.path import abspath, dirname
 from dotenv import load_dotenv
 """
@@ -36,15 +41,21 @@ class Config:
     """
     
     # SESSION CONFIGURATION - User session persistence settings
-    PERMANENT_SESSION_LIFETIME = 2592000  # 30 days in seconds
-    SESSION_PERMANENT = True
-    SESSION_TYPE = 'filesystem'
+    PERMANENT_SESSION_LIFETIME = timedelta(days=30)  # Exactly 30 days
+    SESSION_COOKIE_SECURE = os.environ.get('FLASK_ENV') == 'production'  # HTTPS only in production
+    SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to cookies
+    SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+    REMEMBER_COOKIE_DURATION = timedelta(days=30)  # "Remember me" duration
+    REMEMBER_COOKIE_SECURE = os.environ.get('FLASK_ENV') == 'production'
+    REMEMBER_COOKIE_HTTPONLY = True
     """
-    Session configuration for login persistence:
-    - PERMANENT_SESSION_LIFETIME: How long sessions last (30 days)
-    - SESSION_PERMANENT: Make sessions survive browser restarts
-    - SESSION_TYPE: Store sessions on filesystem (more reliable than memory for production)
-    This ensures users stay logged in and can login again after app restarts
+    Session configuration for secure login persistence:
+    - PERMANENT_SESSION_LIFETIME: Sessions last exactly 30 days, then auto-expire
+    - SESSION_COOKIE_SECURE: HTTPS-only cookies in production (security)
+    - SESSION_COOKIE_HTTPONLY: Prevents XSS attacks by blocking JS access
+    - SESSION_COOKIE_SAMESITE: CSRF protection (Lax allows normal navigation)
+    - REMEMBER_COOKIE_*: Settings for "Remember Me" checkbox (30 days)
+    This ensures users stay logged in for 30 days max and can login after app restarts
     """
     
     # DATABASE CONFIGURATION - Where and how to connect to the database

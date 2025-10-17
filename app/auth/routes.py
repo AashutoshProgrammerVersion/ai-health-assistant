@@ -143,6 +143,9 @@ def login():
             """
         
         # LOG USER IN
+        # The 'remember' parameter controls "Remember Me" functionality
+        # - If True: Cookie lasts for REMEMBER_COOKIE_DURATION (30 days)
+        # - If False: Session expires when browser closes
         login_user(user, remember=form.remember_me.data)
         """
         'login_user(user, remember=form.remember_me.data)' - Log user into session
@@ -152,13 +155,14 @@ def login():
         'form.remember_me.data' - Value of "Remember Me" checkbox
         """
         
-        # Make session permanent so it survives app restarts
+        # Make session permanent (respects PERMANENT_SESSION_LIFETIME = 30 days)
         from flask import session
         session.permanent = True
         """
-        'session.permanent = True' - Make session persist across app restarts
+        'session.permanent = True' - Make session persist with configured lifetime
         This ensures users can login successfully even after Render spins down the app
-        Works with PERMANENT_SESSION_LIFETIME in config.py
+        Session will auto-expire after PERMANENT_SESSION_LIFETIME (30 days) from config.py
+        Even without "Remember Me", login survives app restarts for 30 days
         """
         
         # HANDLE REDIRECT AFTER LOGIN

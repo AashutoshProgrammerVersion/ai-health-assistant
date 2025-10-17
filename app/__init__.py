@@ -196,6 +196,22 @@ def create_app(config_class=Config):
     This blueprint handles user registration, login, and logout
     """
     
+    # SESSION MANAGEMENT - Handle session cleanup and expiration
+    @app.before_request
+    def make_session_permanent():
+        """
+        Make sessions permanent on every request to ensure proper expiration
+        This ensures Flask respects the PERMANENT_SESSION_LIFETIME setting
+        """
+        from flask import session
+        session.permanent = True
+    """
+    '@app.before_request' - Decorator that runs function before each request
+    'make_session_permanent()' - Function to ensure session uses permanent lifetime
+    This guarantees sessions expire after exactly 30 days, not sooner
+    Helps maintain login state even after Render app restarts
+    """
+    
     app.register_blueprint(auth_bp, url_prefix='/auth')
     """
     'app.register_blueprint(auth_bp, url_prefix='/auth')' - Register auth blueprint
